@@ -440,6 +440,35 @@ def process(els: List[wdict]):
     vtypes_tbl = { 'wo': {2}, 'do': {4}, 'qp': {8}, 'v': {2,4}, 'vds':{2,4,8}, 'vq':{4,2}, 'vqp':{2,4,8}, 'vs':{2,4}, \
                    'dqp':{4,8}, 'p':{2,4}, 'ptp':{2,4,8} }
 
+    def code_vtype(vtype) -> Optional[Union[dict, int]]:
+        vtt0 = { 'b':1, 'bs':1, 'bss':1, 'd':4, 'di':4, 'dq':16, 'dr':8, 'ds':4, 'pi':8, 'pd':16, 'ps':16, 'psq':8, \
+                 'q':8, 'qi':8, 'sd':8, 'sr':4, 'ss':4, 'w':2, 'wi':2 }
+        vtt = wdict({ vtname:{v:v for v in vtset} for vtname,vtset in vtypes_tbl.items() })
+        vtt.vds[8] = 4
+        vtt.vq[4] = 8
+        del vtt['p']
+        del vtt['ptp']
+        vtt.update(vtt0)
+
+        if vtype in vtt:
+            return vtt[vtype]
+        else:
+            return None
+
+    def replace_syns_types(syn):
+        op_szs = set()
+        for p in syn.params:
+            if vtype := p.get('vtype'):
+                p['vtype_raw'] = vtype
+                if cvtype := code_vtype(vtype):
+                    p['vtype'] = cvtype
+                    if type(cvtype)==dict:
+                        op_szs.update(cvtype.keys())
+                else:
+                    p['vtype'] = -1
+        syn['op_szs'] = list(op_szs) if len(op_szs)>0 else None
+
+
     for el in els:
         grouped_syns = defaultdict(list)
         for syn in el.syns:
@@ -459,6 +488,10 @@ def process(els: List[wdict]):
                 print('synvtypes anomaly:',el.btuple[0], el.btuple[3])
             for synvt in synvtypes:
                 if synvt==None: continue
+
+    for el in els:
+        for syn in el.syns:
+            replace_syns_types(syn)
 
 
     return els

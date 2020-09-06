@@ -539,7 +539,13 @@ end
 local function decodeCodePoint(bytes, byte_i, bitness)
     local byte_i_0 = byte_i
     local op, modrm, prefs, byte_i = decodeOpInitial(bytes, byte_i, bitness)
+    local rexw = (prefs.rex or 0)&8 ~= 0
 
+    local op_sz_attr = rexw and 8 or 4
+    if tbl_is_in(prefs, 0x66) then op_sz_attr=2 end
+    for i,s in ipairs(op.syns) do
+        -- body
+    end
 end
 
 
