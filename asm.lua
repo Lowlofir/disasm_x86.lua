@@ -110,7 +110,6 @@ end
 local asm_decoding_map = make_decoding_map()
 assert(asm_decoding_map)
 
-local asm_regs = { 'ax', 'cx', 'dx', 'bx', 'sp', 'bp', 'si', 'di' }
 
 local function tbl_is_in(t, o)
     for i=1,#t do
@@ -580,15 +579,61 @@ local function readToNumber(bytes, byte_i, b_n)
     return value
 end
 
+local asm_regs = { 'ax', 'cx', 'dx', 'bx', 'sp', 'bp', 'si', 'di' }
+local asm_regs2 = { 'a', 'c', 'd', 'b', 'sp', 'bp', 'si', 'di' }
+
 
 local code_point_mt = {}
 code_point_mt.__index = code_point_mt
 
-function code_point_mt:textify(syn_i)
-    local syn = self.syns[syn_i]
-    local opname = type(syn.mnem)=='table' and table.concat(syn.mnem, '/') or syn.mnem
+local function textifyRegister(reg_i, reg_sz, rex) -- reg_i from 0, reg_sz from 1 to 8, rex is bool-tested
+    if reg_i<8 then
+        if reg_sz>=2 then
+            local prefix = reg_sz<4 and '' or (reg_sz==4 and 'e' or 'r')
+            return prefix..asm_regs[reg_i+1]
+        else
+            local reg_lh = 'l'
+            if not rex then 
+                reg_i = reg_i%4 
+                reg_lh = reg_i//4>0 and 'h' or 'l'
+            end
+            return asm_regs2[reg_i+1]..reg_lh
+        end
+    else   
+        local pfix = reg_sz>4 and '' or (reg_sz==4 and 'd' or (reg_sz==2 and 'w' or 'l'))
+        return 'r'..tostring(reg_i)..pfix
+    end
+end
 
-    
+function code_point_mt:textify(syn_i)
+    local syn = self.syns[syn_i or 1]
+    local op = self.op
+    local opname = type(syn.mnem)=='table' and table.concat(syn.mnem, '/') or syn.mnem
+    if not op.modrm then return opname end
+
+    -- assert(op.bit_dir)
+    local rm_reg
+    if type(self.modrm.rm)=='string' then 
+        rm_reg = self.modrm.rm
+    elseif self.modrm.rm then
+        rm_reg = textifyRegister(self.modrm.rm, self._op_sz_attr, self.prefs.rex)
+    end
+
+    local reg_reg = textifyRegister(self.modrm.reg, self._op_sz_attr, self.prefs.rex)
+    local args = {}
+    if op.bit_dir==0 then
+        args[1] = rm_reg
+        args[2] = reg_reg
+    elseif op.bit_dir==1 then
+        args[1] = reg_reg
+        args[2] = rm_reg
+    else
+        args[1] = reg_reg
+    end
+    if op.imms then
+
+    end
+    return opname..' '..table.concat(args, ',')
 end
 
 local function decodeCodePoint(bytes, byte_i, bitness)
@@ -597,14 +642,14 @@ local function decodeCodePoint(bytes, byte_i, bitness)
     if not op then return end
     local disp_value
     if modrm and modrm.disp and modrm.disp>0 then
-        print(table2str(modrm))
+        -- print(table2str(modrm))
         disp_value = readToNumber(bytes, byte_i, modrm.disp)
         byte_i = byte_i + modrm.disp
     end
 
     local rexw = (prefs.rex or 0)&8 ~= 0
 
-    local code_point = {}
+    local code_point = setmetatable({}, code_point_mt)
     code_point.prefs = prefs
     code_point.op = op
     code_point.modrm = modrm
@@ -616,6 +661,8 @@ local function decodeCodePoint(bytes, byte_i, bitness)
     end
     local op_sz_attr = rexw and 8 or 4
     if tbl_is_in(prefs, 0x66) then op_sz_attr=2 end
+    code_point._op_sz_attr = op_sz_attr
+
     local syntaxes = {}
     for i,s in ipairs(op.syns) do
         if ((s.op_szs and tbl_is_in(s.op_szs, op_sz_attr)) or not s.op_szs) and (not s.mod or s.mod == mod) then
