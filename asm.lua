@@ -460,10 +460,45 @@ function module.decodeOp(bytes, byte_i, bitness)
     end
     return ops, byte_i, prefs
 end
--- module.decodeOp = profiled(module.decodeOp, 'decodeOp')
 
-local function decodeOpBasic(bytes, byte_i, bitness)
-    
+
+local function decodeOpInitial(bytes, byte_i, bitness)
+    local byte_i_0 = byte_i
+    local ops, byte_i, prefs = module.decodeOp(bytes, byte_i, bitness)
+    if #ops==0 then return end
+    if #ops~=1 then
+        local s=''
+        for i=0, 7 do
+            s=s..('%X'):format(bytes[byte_i_0+i])..' '
+        end
+        -- print(s)
+        -- print(table2str(ops))
+        return
+    end
+    local maxbi = #bytes
+
+    -- assert(#ops==1)
+    local op = ops[1]
+    byte_i = byte_i + op.opcd_sz
+    local modrm
+    local sib 
+    if op.modrm then
+        if byte_i>maxbi then return end
+        modrm = decodeModRM(op, bytes[byte_i], prefs.rex, tbl_is_in(prefs, 0x67), bitness)
+        byte_i = byte_i + 1
+        if modrm.sib then
+            if byte_i>maxbi then return end
+            sib = decodeSIB(bytes[byte_i], bytes[byte_i-1], prefs.rex)
+            modrm.sib = sib
+            byte_i = byte_i + 1
+        end
+        if sib and not sib.base then
+            byte_i = byte_i + 4
+        elseif modrm.disp and modrm.disp>0 then
+            byte_i = byte_i + modrm.disp
+        end
+    end
+    return op, modrm, byte_i
 end
 
 function module.decodeFullOp(bytes, byte_i, bitness)
