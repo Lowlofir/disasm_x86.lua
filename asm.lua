@@ -679,6 +679,31 @@ function code_point_mt:textify(syn_i)
     return opname..' '..table.concat(args, ',')
 end
 
+-- (gen|mmx|xmm|seg|x87fpu|ctrl|systabp|msr|debug|xcr)
+local asm_addr_reg = { C='ctrl', D='debug', G='gen', P='mmx', S='seg', T='test', V='xmm' }
+local asm_addr_rm = { E={'gen','mem'}, ES={'x87fpu','mem'}, EST={'x87fpu'}, H={'gen'}, M={'mem'}, N={'mmx'},\
+                      Q={'mmx','mem'}, R={'gen'}, U={'xmm'}, W={'xmm','mem'} }
+
+local asm_addr_imm = { I=true, J=true, O=true }
+-- special: H, Z, O?
+
+function code_point_mt:textify2(syn)
+    local syn = syn or self.syns[1]
+    local op = self.op
+    local opname = type(syn.mnem)=='table' and table.concat(syn.mnem, '/') or syn.mnem
+    local args = {}
+    for i, p in ipairs(syn.params) do
+        if p.hidden then goto continue end
+
+        local reg_lp = asm_addr_reg[p.address]
+
+        ::continue::
+    end
+
+    return opname..' '..table.concat(args, ',')
+end
+
+
 local function decodeCodePoint(bytes, byte_i, bitness)
     local byte_i_0 = byte_i
     local op, modrm, prefs, byte_i = decodeOpInitial(bytes, byte_i, bitness)
@@ -708,6 +733,7 @@ local function decodeCodePoint(bytes, byte_i, bitness)
     code_point.size = byte_i - byte_i_0 
     code_point._disp_value = disp_value
     code_point._imm_values = imm_values
+
     local mod
     if modrm then
         mod = (modrm.disp == nil) and 'nomem' or 'mem'
