@@ -35,7 +35,7 @@ local function disasm_region(addr0, size, file)
                 s_bytes = s_bytes..('%02X'):format(bytestbl[i] or 0)..' '
             end
             local dispstr = cp._disp_value and ('%X'):format(cp._disp_value) or ''
-            file:write(s_bytes, ' - ', cp:textify(), '\n')
+            file:write(s_bytes, ' - ', cp:textify2(), '\n')
         else
             file:write('ERROR\n')
         end
