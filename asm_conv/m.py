@@ -179,8 +179,11 @@ def extract():
                             pm['value'] = syn_child.text
                             if syn_child.get('nr'):
                                 pm['nr'] = syn_child.get('nr')
+                                assert syn_child.get('group')
+                                pm['group'] = syn_child.get('group')
                         else:
                             assert not syn_child.get('nr')
+                            assert not syn_child.get('group')
 
                         if syn_child_addr := syn_child.get('address'):
                             pm['address'] = syn_child_addr
@@ -489,6 +492,13 @@ def process(els: List[wdict]):
         for syn in el.syns:
             replace_syns_types(syn)
 
+    for el in els:
+        for syn in el.syns:
+            for p in syn.params:
+                if p['hidden'] == False:
+                    del p['hidden']
+
+
 
     return els
 
@@ -501,10 +511,10 @@ t2 = time.perf_counter()
 
 # pprint(els, width=120, indent=4)
 print(sorted(ddd))
+print(t2 - t1)
 
 # print(serialize({ 'a':None, 'b':1, 'c':2, 'd':None, 'e':False}, False))
 # print(serialize([ None, 1, 2, None, False], False))
-print(t2 - t1)
 t1 = time.perf_counter()
 # cProfile.run("ser = write({'opcodes': els, 'prefixes': prefixes}, 'asm_db.lua', form=True)", sort=SortKey.TIME)
 ser = write({'opcodes': els, 'prefixes': prefixes}, 'asm_db.lua', form=True)
