@@ -12,7 +12,7 @@ local begin_addr = '7FF6DD777416'
 
 local addr = getAddress(begin_addr)
 
-local file = io.open('D:\\Users\\Anon\\Documents\\My Cheat Tables\\disasm.asm' , 'w')
+local file = io.open('D:\\_dev\\lua\\disasm\\disasm.asm' , 'w')
 local tnative = 0
 local function disasm_region(addr0, size, file)
     local addr = addr0
@@ -25,35 +25,21 @@ local function disasm_region(addr0, size, file)
         tnative = tnative + (os.clock()-t1)
         
         local bytestbl, opcode = disdata.bytes, disdata.opcode
-        local ops, dbgstr = asm_db.find(opcode, bytestbl, 64)
-        
-        local dec, modrm, dec_sz = asm_db.decodeFullOp(bytestbl, 1, 64)
-        
-        if (dbgstr and dbgstr~='\n') and (not ops or #ops~=1 or #ops[1][2]~=1) then
-            file:write(dis, '\n')
-            file:write(dbgstr or '')
+        file:write(dis, '\n')
+
+        local cp = asm_db.decodeCodePoint(bytestbl, 1, targetIs64Bit() and 64 or 32)
+        if cp then
+            if cp.size~=#bytestbl then file:write('SZ ERROR\n') end
+            local s_bytes = ''
+            for i=1,cp.size do
+                s_bytes = s_bytes..('%02X'):format(bytestbl[i] or 0)..' '
+            end
+            local dispstr = cp._disp_value and ('%X'):format(cp._disp_value) or ''
+            file:write(s_bytes, ' - ', cp:textify(), '\n')
+        else
+            file:write('ERROR\n')
         end
 
-        -- if #dec~=1 then
-        if dec_sz~=#bytestbl or (dec and dec.debug) then 
-            if dec and dec.debug then
-                file:write('dec.debug', '\n')
-                dec.debug = false
-            end
-            file:write(dis, '\n')
-        -- file:write(dbgstr or '')
-            if not dec then
-                file:write('INVALID', '\n')
-            else
-                file:write('SZ: ', dec_sz, '\n')
-                file:write(table2str(dec), '\n')
-                if modrm then
-                    file:write(table2str(modrm), '\n')
-                end
-            end
-        end
-        -- end   
-        
         addr = addr + #bytestbl
         if addr>addr0+size then break end
     end
@@ -61,12 +47,12 @@ end
 
 local function scan_thr(thr)
     local t0 = os.clock()
-    for i=1000,2000 do
+    for i=100,100 do
         if os.clock()-t0 >= 1 then 
             print('.')
             t0 = os.clock()
         end
-        local len = 0x1000
+        local len = 0x100
         local size = (funcs[i+1]-funcs[i])>len and len or funcs[i+1]-funcs[i]
         local r = xpcall( disasm_region, function (err) print(err,debug.traceback()) end, funcs[i], size, file)
         if not r then
@@ -76,34 +62,33 @@ local function scan_thr(thr)
     print('finished')
     file:close()
     print('tnative',tnative)
-    print_profiling()
 end
 
--- local thr = createThread(scan_thr)
+local thr = createThread(scan_thr)
 
-local reg = readBytes(funcs[1000], 0x40000, true)
+-- local reg = readBytes(funcs[1000], 0x40000, true)
 
-local function decodeSolo(bytes)
-    local b_i = 1
-    local size = #reg
-    while b_i < size do
-        local dec, modrm, dec_sz = asm_db.decodeFullOp(bytes, b_i, 64)
-        if dec then
-            file:write(('%X'):format(b_i+addr-1), ' - ', dec.syns[1].mnem, '\n')
-            b_i = b_i + dec_sz
-        else
-            file:write('ERROR\n')
-            b_i = b_i + 1
-        end
-    end
-end
+-- local function decodeSolo(bytes)
+--     local b_i = 1
+--     local size = #reg
+--     while b_i < size do
+--         local dec, modrm, dec_sz = asm_db.decodeFullOp(bytes, b_i, 64)
+--         if dec then
+--             file:write(('%X'):format(b_i+addr-1), ' - ', dec.syns[1].mnem, '\n')
+--             b_i = b_i + dec_sz
+--         else
+--             file:write('ERROR\n')
+--             b_i = b_i + 1
+--         end
+--     end
+-- end
 
 -- assert(reg)
-ProFi = dofile 'D:\\_dev\\lua\\disasm\\ProFi.lua'
+-- ProFi = dofile 'D:\\_dev\\lua\\disasm\\ProFi.lua'
 -- ProFi:setInspect('decodeFullOp', 2)
-ProFi:start()
-local r = xpcall( decodeSolo, function (err) print(err,debug.traceback()) end, reg)
-ProFi:stop()
-ProFi:writeReport( 'D:\\_dev\\lua\\disasm\\MyProfilingReport.txt' )
+-- ProFi:start()
+-- local r = xpcall( decodeSolo, function (err) print(err,debug.traceback()) end, reg)
+-- ProFi:stop()
+-- ProFi:writeReport( 'D:\\_dev\\lua\\disasm\\MyProfilingReport.txt' )
 
-file:close()
+-- file:close()

@@ -493,9 +493,7 @@ local function decodeOpInitial(bytes, byte_i, bitness)
             byte_i = byte_i + 1
         end
         if sib and not sib.base then
-            byte_i = byte_i + 4
-        elseif modrm.disp and modrm.disp>0 then
-            byte_i = byte_i + modrm.disp
+            modrm.disp = 4
         end
     end
     return op, modrm, prefs, byte_i
@@ -536,6 +534,9 @@ end
 function module.decodeFullOp(bytes, byte_i, bitness)
     local byte_i_0 = byte_i
     local op, modrm, prefs, byte_i = decodeOpInitial(bytes, byte_i, bitness)
+    if modrm.disp then
+        byte_i = byte_i + modrm.disp
+    end
     if op.imms then
         for _, imm in ipairs(op.imms) do
             local imm_sz = imm.s
@@ -568,10 +569,39 @@ function module.decodeFullOp(bytes, byte_i, bitness)
 end
 -- module.decodeFullOp = profiled(module.decodeFullOp, 'decodeFullOp')
 
+local function readToNumber(bytes, byte_i, b_n)
+    local value = 0
+    local v_b_i = 0
+    repeat
+        value = value<<8
+        value = value + bytes[byte_i+v_b_i]
+        v_b_i = v_b_i + 1
+    until v_b_i>=b_n-1
+    return value
+end
+
+
+local code_point_mt = {}
+code_point_mt.__index = code_point_mt
+
+function code_point_mt:textify(syn_i)
+    local syn = self.syns[syn_i]
+    local opname = type(syn.mnem)=='table' and table.concat(syn.mnem, '/') or syn.mnem
+
+    
+end
+
 local function decodeCodePoint(bytes, byte_i, bitness)
     local byte_i_0 = byte_i
     local op, modrm, prefs, byte_i = decodeOpInitial(bytes, byte_i, bitness)
     if not op then return end
+    local disp_value
+    if modrm and modrm.disp and modrm.disp>0 then
+        print(table2str(modrm))
+        disp_value = readToNumber(bytes, byte_i, modrm.disp)
+        byte_i = byte_i + modrm.disp
+    end
+
     local rexw = (prefs.rex or 0)&8 ~= 0
 
     local code_point = {}
@@ -579,6 +609,7 @@ local function decodeCodePoint(bytes, byte_i, bitness)
     code_point.op = op
     code_point.modrm = modrm
     code_point.size = byte_i - byte_i_0 + (op.imms and countImmsBytes(op, prefs, bitness) or 0)
+    code_point._disp_value = disp_value
     local mod
     if modrm then
         mod = (modrm.disp == nil) and 'nomem' or 'mem'

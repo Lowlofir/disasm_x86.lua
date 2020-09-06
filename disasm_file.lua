@@ -19,7 +19,8 @@ local function decodeSolo(bytes)
             for i=1,cp.size do
                 s_bytes = s_bytes..('%02X'):format(bytes[b_i+i-1])..' '
             end
-            disfile:write(('%06X'):format(b_i-1), ' - ', s_bytes, ' - ', opname, '\n')
+            local dispstr = cp._disp_value and ('%X'):format(cp._disp_value) or ''
+            disfile:write(('%06X'):format(b_i-1), ' - ', s_bytes, ' - ', opname..' '..dispstr, '\n')
             b_i = b_i + cp.size
         else
             disfile:write('ERROR\n')
