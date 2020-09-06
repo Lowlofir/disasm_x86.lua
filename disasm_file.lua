@@ -12,15 +12,28 @@ local function decodeSolo(bytes)
     local b_i = 1
     local size = #bytes
     while b_i < size do
-        local dec, modrm, dec_sz = asm_db.decodeFullOp(bytes, b_i, 64)
-        if dec then
-            -- disfile:write(('%06X'):format(b_i-1), ' - ', dec.syns[1].mnem, '\n')
-            disfile:write(('%06X'):format(b_i-1), ' - ', '\n')
-            b_i = b_i + dec_sz
+        local cp = asm_db.decodeCodePoint(bytes, b_i, 64)
+        if cp then
+            local opname = type(cp.syns[1].mnem)=='table' and cp.syns[1].mnem[1] or cp.syns[1].mnem
+            local s_bytes = ''
+            for i=1,cp.size do
+                s_bytes = s_bytes..('%02X'):format(bytes[b_i+i-1])..' '
+            end
+            disfile:write(('%06X'):format(b_i-1), ' - ', s_bytes, ' - ', opname, '\n')
+            b_i = b_i + cp.size
         else
             disfile:write('ERROR\n')
             b_i = b_i + 1
         end
+        -- local dec, modrm, dec_sz = asm_db.decodeFullOp(bytes, b_i, 64)
+        -- if dec then
+        --     -- disfile:write(('%06X'):format(b_i-1), ' - ', dec.syns[1].mnem, '\n')
+        --     disfile:write(('%06X'):format(b_i-1), ' - ', '\n')
+        --     b_i = b_i + dec_sz
+        -- else
+        --     disfile:write('ERROR\n')
+        --     b_i = b_i + 1
+        -- end
     end
 end
 
@@ -50,9 +63,10 @@ assert(bytes_read==#filedata_s)
 -- assert(reg)
 -- ProFi:start()
 t1 = os.clock()
-for i=1,#filedata_arr do
-    xpcall( decodeSolo, function (err) print(err,debug.traceback()) end, filedata_arr[i])
-    if os.clock()-t1 > 20 then
+-- for i=1,#filedata_arr do
+for i=1,1 do
+    xpcall( decodeSolo, function (err) print(err..'\n',debug.traceback()) end, filedata_arr[i])
+    if os.clock()-t1 > 10 then
         print('break')
         break
     end

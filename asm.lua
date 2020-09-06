@@ -37,7 +37,7 @@ local function create_mnem_map()
 end
 
 -- create_mnem_map = profiled(create_mnem_map, 'create_mnem_map')
-create_mnem_map()
+-- create_mnem_map()
 
 local asm_pref_map = {}
 for _,el in ipairs(asm_db.prefixes) do
@@ -333,7 +333,7 @@ local function decodeModRM(op, modrm_val, rex, x67, bitmode)
     if op.opcd_ext then
         reg = rm + ((rex&1)<<3)
     end
-    local disp
+    local disp   -- remains nil if mod==0b11
     if mod<=1 then disp=mod
     elseif mod==2 then disp=4 end
 
@@ -501,6 +501,38 @@ local function decodeOpInitial(bytes, byte_i, bitness)
     return op, modrm, prefs, byte_i
 end
 
+local function countImmsBytes(op, prefs, bitness)
+    assert(op.imms)
+    local byte_i = 0
+    for _, imm in ipairs(op.imms) do
+        local imm_sz = imm.s
+        if imm.s == 'addr' then
+            imm_sz = bitness//8
+        else
+            assert(type(imm.s)=='number')
+            
+            if (prefs.rex or 0)&8 ~= 0 then
+                if imm.rexw == 'promote' then
+                    imm_sz = 8
+                elseif imm.rexw == 'ignore' then    
+                    -- ignore
+                elseif imm.rexw == 'uimpl' then
+                    op.debug = true
+                end
+            end
+            if imm.x66 and tbl_is_in(prefs, 0x66) then
+                if imm.x66=='uimpl' then 
+                    op.debug = true
+                else
+                    imm_sz = imm.x66
+                end
+            end
+        end
+        byte_i = byte_i + imm_sz
+    end
+    return byte_i
+end
+
 function module.decodeFullOp(bytes, byte_i, bitness)
     local byte_i_0 = byte_i
     local op, modrm, prefs, byte_i = decodeOpInitial(bytes, byte_i, bitness)
@@ -539,14 +571,33 @@ end
 local function decodeCodePoint(bytes, byte_i, bitness)
     local byte_i_0 = byte_i
     local op, modrm, prefs, byte_i = decodeOpInitial(bytes, byte_i, bitness)
+    if not op then return end
     local rexw = (prefs.rex or 0)&8 ~= 0
 
+    local code_point = {}
+    code_point.prefs = prefs
+    code_point.op = op
+    code_point.modrm = modrm
+    code_point.size = byte_i - byte_i_0 + (op.imms and countImmsBytes(op, prefs, bitness) or 0)
+    local mod
+    if modrm then
+        mod = (modrm.disp == nil) and 'nomem' or 'mem'
+    end
     local op_sz_attr = rexw and 8 or 4
     if tbl_is_in(prefs, 0x66) then op_sz_attr=2 end
+    local syntaxes = {}
     for i,s in ipairs(op.syns) do
-        -- body
+        if ((s.op_szs and tbl_is_in(s.op_szs, op_sz_attr)) or not s.op_szs) and (not s.mod or s.mod == mod) then
+            syntaxes[#syntaxes+1] = s
+        end
     end
+    code_point.syns = syntaxes
+    assert(#syntaxes>0)
+
+    return code_point
 end
+
+module.decodeCodePoint = decodeCodePoint
 
 
 function module.find(opname, bytearr, bitness)

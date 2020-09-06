@@ -359,10 +359,9 @@ def process(els: List[wdict]):
     def merge_syns_mnem(el, g):
         moved_i = set()
         g.sort(key=attrgetter('i'))
-        g[0]['mnem_list'] = [ g[0].mnem ]
-        del g[0]['mnem']
+        g[0]['mnem'] = [ g[0].mnem ]
         for s in g[1:]:
-            g[0].mnem_list.append(s.mnem)
+            g[0].mnem.append(s.mnem)
             moved_i.add(s.i)
         return [s for s in el.syns if s.i not in moved_i]
 
@@ -403,12 +402,11 @@ def process(els: List[wdict]):
         g.sort(key=attrgetter('i'))
         g[0]['hsgroup'] = True
         assert all('mnem_list' not in s for s in g)
-        g[0]['mnem_list'] = [ g[0].mnem ]
-        del g[0]['mnem']
+        g[0]['mnem'] = [ g[0].mnem ]
         for p in g[0].params:
             p['hidden'] = [ p['hidden'] ]
         for s in g[1:]:
-            g[0].mnem_list.append(s.mnem)
+            g[0].mnem.append(s.mnem)
             for i,p in enumerate(s.params):
                 g[0].params[i]['hidden'].append(p['hidden'])
             moved_i.add(s.i)
@@ -486,8 +484,6 @@ def process(els: List[wdict]):
                 synvtypes.append(parvtypes[0] if parvtypes else None)
             if any(synvt==None for synvt in synvtypes) and not all(synvt==None for synvt in synvtypes):
                 print('synvtypes anomaly:',el.btuple[0], el.btuple[3])
-            for synvt in synvtypes:
-                if synvt==None: continue
 
     for el in els:
         for syn in el.syns:
