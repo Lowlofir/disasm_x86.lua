@@ -353,11 +353,11 @@ local function decodeModRM(op, modrm_val, rex, x67, bitmode)
             return { disp = 4, reg = reg, rm = '0' }
         end
     end
-    if not op.opcd_ext then
+    -- if not op.opcd_ext then
         rm = rm + ((rex&1)<<3)
-    else
-        rm = nil
-    end
+    -- else
+    --     rm = nil
+    -- end
     return { disp = disp, reg = reg, rm = rm }
 end
 
@@ -746,16 +746,19 @@ function code_point_mt:textify2(syn)
             if self.modrm.disp then  -- mod != 11
                 local a
                 if not self.modrm.sib then  -- no SIB
-                    local rmstr = type(self.modrm.rm)=='string'
-                    local rs = rmstr and self.modrm.rm or textifyRegister2(self.modrm.rm, self._op_sz_attr, self.prefs.rex, rm_lp[1] and rm_lp[1] or 'gen')
-                    a = ('[%s%+d]'):format(rs, self._disp_value)
+                    if self.modrm.rm=='0' then
+                        a = ('[%X]'):format(self._disp_value)
+                    else
+                        local rs = textifyRegister2(self.modrm.rm, self._op_sz_attr, self.prefs.rex, rm_lp[1] and rm_lp[1] or 'gen')
+                        a = ('[%s+%X]'):format(rs, self._disp_value)
+                    end
                 else  -- SIB
                     a = '[SIB]'
                 end
                 assert(a)
                 args[#args+1] = a
                 goto continue
-            else
+            else                   -- mod == 11
                 args[#args+1] = textifyRegister2(self.modrm.rm or self._Z, self._op_sz_attr, self.prefs.rex, rm_lp[1] and rm_lp[1] or 'gen')
                 goto continue
             end
