@@ -8,9 +8,9 @@ local diss = getDissectCode()
 local funcs = diss.getReferencedFunctions()
 
 
-local begin_addr = '7FF6DD777416'
+-- local begin_addr = '7FF6DD777416'
 
-local addr = getAddress(begin_addr)
+-- local addr = getAddress(begin_addr)
 
 local file = io.open('D:\\_dev\\lua\\disasm\\disasm.asm' , 'w')
 local tnative = 0
@@ -47,7 +47,7 @@ end
 
 local function scan_thr(thr)
     local t0 = os.clock()
-    for i=100,100 do
+    for i=20,100 do
         if os.clock()-t0 >= 1 then 
             print('.')
             t0 = os.clock()

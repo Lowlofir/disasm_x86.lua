@@ -466,7 +466,7 @@ def process(els: List[wdict]):
                     if type(cvtype)==dict:
                         op_szs.update(cvtype.keys())
                 else:
-                    p['vtype'] = -1
+                    p['vtype'] = 'undef'
         syn['op_szs'] = list(op_szs) if len(op_szs)>0 else None
 
 

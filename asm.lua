@@ -15,6 +15,14 @@ function table2str(t, lvl)
     return s..(' '):rep(lvl*4)..'},\n'
 end
 
+function to_shex(n)
+    if n>=0 then 
+        return ('%X'):format(n)
+    else
+        return ('-%X'):format(-n)
+    end
+end
+
 local asm_db = dofile 'D:\\_dev\\lua\\disasm\\asm_conv\\asm_db.lua'
 
 local asm_mnem_map = {}
@@ -570,13 +578,40 @@ end
 
 local function readToNumber(bytes, byte_i, b_n)
     local value = 0
-    local v_b_i = 0
+    local v_b_i = b_n - 1
     repeat
         value = value<<8
         value = value + bytes[byte_i+v_b_i]
-        v_b_i = v_b_i + 1
-    until v_b_i>=b_n-1
-    return value
+        v_b_i = v_b_i - 1
+    until v_b_i<0
+    return value - (value&1<<(b_n*8-1))*2
+end
+
+local function readImm(imm, bytes, byte_i, prefs, bitness)
+    local imm_sz = imm.s
+    if imm.s == 'addr' then
+        imm_sz = bitness//8
+    else
+        assert(type(imm.s)=='number')
+        
+        if (prefs.rex or 0)&8 ~= 0 then
+            if imm.rexw == 'promote' then
+                imm_sz = 8
+            elseif imm.rexw == 'ignore' then    
+                -- ignore
+            elseif imm.rexw == 'uimpl' then
+                -- op.debug = true
+            end
+        end
+        if imm.x66 and tbl_is_in(prefs, 0x66) then
+            if imm.x66=='uimpl' then 
+                -- op.debug = true
+            else
+                imm_sz = imm.x66
+            end
+        end
+    end
+    return readToNumber(bytes, byte_i, imm_sz), imm_sz
 end
 
 local asm_regs = { 'ax', 'cx', 'dx', 'bx', 'sp', 'bp', 'si', 'di' }
@@ -609,29 +644,37 @@ function code_point_mt:textify(syn_i)
     local syn = self.syns[syn_i or 1]
     local op = self.op
     local opname = type(syn.mnem)=='table' and table.concat(syn.mnem, '/') or syn.mnem
-    if not op.modrm then return opname end
-
-    -- assert(op.bit_dir)
-    local rm_reg
-    if type(self.modrm.rm)=='string' then 
-        rm_reg = self.modrm.rm
-    elseif self.modrm.rm then
-        rm_reg = textifyRegister(self.modrm.rm, self._op_sz_attr, self.prefs.rex)
-    end
-
-    local reg_reg = textifyRegister(self.modrm.reg, self._op_sz_attr, self.prefs.rex)
     local args = {}
-    if op.bit_dir==0 then
-        args[1] = rm_reg
-        args[2] = reg_reg
-    elseif op.bit_dir==1 then
-        args[1] = reg_reg
-        args[2] = rm_reg
-    else
-        args[1] = reg_reg
-    end
-    if op.imms then
+    if op.modrm then
+        local rm_reg
+        if type(self.modrm.rm)=='string' then 
+            rm_reg = self.modrm.rm
+        elseif self.modrm.rm then
+            rm_reg = textifyRegister(self.modrm.rm, self._op_sz_attr, self.prefs.rex)
+        end
+        if rm_reg and (self.modrm.disp or 0)>0 then
+            rm_reg = '['..rm_reg..(self._disp_value>0 and '+' or '')..tostring(self._disp_value)..']'
+        elseif rm_reg and self.modrm.disp==0 then
+            rm_reg = '['..rm_reg..']'
+        end
 
+        local reg_reg = textifyRegister(self.modrm.reg, self._op_sz_attr, self.prefs.rex)
+        
+
+        if op.bit_dir==0 then
+            args[#args+1] = rm_reg
+            args[#args+1] = reg_reg
+        elseif op.bit_dir==1 then
+            args[#args+1] = reg_reg
+            args[#args+1] = rm_reg
+        else
+            args[#args+1] = reg_reg
+        end
+    end
+    if self._imm_values then
+        for _,immv in ipairs(self._imm_values) do
+            args[#args+1] = to_shex(immv)
+        end
     end
     return opname..' '..table.concat(args, ',')
 end
@@ -646,6 +689,15 @@ local function decodeCodePoint(bytes, byte_i, bitness)
         disp_value = readToNumber(bytes, byte_i, modrm.disp)
         byte_i = byte_i + modrm.disp
     end
+    local imm_values
+    if op.imms then
+        imm_values = {}
+        for i=1,#op.imms do
+            local sz
+            imm_values[i], sz = readImm(op.imms[i], bytes, byte_i, prefs, bitness)
+            byte_i = byte_i + sz
+        end
+    end
 
     local rexw = (prefs.rex or 0)&8 ~= 0
 
@@ -653,8 +705,9 @@ local function decodeCodePoint(bytes, byte_i, bitness)
     code_point.prefs = prefs
     code_point.op = op
     code_point.modrm = modrm
-    code_point.size = byte_i - byte_i_0 + (op.imms and countImmsBytes(op, prefs, bitness) or 0)
+    code_point.size = byte_i - byte_i_0 
     code_point._disp_value = disp_value
+    code_point._imm_values = imm_values
     local mod
     if modrm then
         mod = (modrm.disp == nil) and 'nomem' or 'mem'
