@@ -374,7 +374,7 @@ local function decodeSIB(sib_v, modrm_v, rex)
     if mod==0 and sib_v&7==5 then
         base = nil  -- means disp32
     end
-    return { scale = scale, index = index, base = base }
+    return { s = scale, index = index, base = base }
 end
 
 local function search_decoding_level(res, level, bytes, byte_i)
@@ -659,7 +659,7 @@ local function textifyRegister(reg_i, reg_sz, rex, reg_group) -- reg_i from 0, r
 end
 
 
-function code_point_mt:textify(syn_i)
+function code_point_mt:textifyPrimitive(syn_i)
     local syn = self.syns[syn_i or 1]
     local op = self.op
     local opname = type(syn.mnem)=='table' and table.concat(syn.mnem, '/') or syn.mnem
@@ -698,6 +698,27 @@ function code_point_mt:textify(syn_i)
     return opname..' '..table.concat(args, ',')
 end
 
+function code_point_mt:textifySib()
+    local sib = self.modrm.sib
+    local disp_v = self._disp_value
+    assert(sib)
+
+    local b1
+    if sib.base then
+        b1 = textifyGenRegister(sib.base, self._addr_sz_attr, self.prefs.rex)
+    end
+    local b2
+    if sib.s~=0 then
+        b2 = (b1 and '+' or '')..textifyGenRegister(sib.index, self._addr_sz_attr, self.prefs.rex)..'*'..tostring(sib.s)
+    end
+    local b3
+    if disp_v and disp_v>0 then
+        b3 = to_shex(disp_v, true)
+    end
+    self.debug= 'sib'
+    return '['..(b1 or '')..(b2 or '')..(b3 or '')..']'
+end
+
 -- (gen|mmx|xmm|seg|x87fpu|ctrl|systabp|msr|debug|xcr)
 local asm_addr_reg = { C='ctrl', D='debug', G='gen', P='mmx', S='seg', V='xmm' } --  T='test'
 local asm_addr_rm = { E={'gen','mem'}, ES={'x87fpu','mem'}, EST={'x87fpu'}, H={'gen'}, M={'mem'}, N={'mmx'},
@@ -706,7 +727,7 @@ local asm_addr_rm = { E={'gen','mem'}, ES={'x87fpu','mem'}, EST={'x87fpu'}, H={'
 local asm_addr_imm = { I=true, J=true, O=true }
 -- special: H, Z, O?
 
-function code_point_mt:textify2(syn)
+function code_point_mt:textify(syn)
     local syn = syn or self.syns[1]
     local op = self.op
     local opname = type(syn.mnem)=='table' and table.concat(syn.mnem, '/') or syn.mnem
@@ -760,7 +781,9 @@ function code_point_mt:textify2(syn)
                         a = ('[%s%s]'):format(rs, disp_str)
                     end
                 else  -- SIB
-                    a = '[SIB]'
+                    -- print('presib')
+                    a = self:textifySib()
+                    -- print('postsib')
                 end
                 assert(a)
                 args[#args+1] = a
@@ -795,7 +818,7 @@ function code_point_mt:textify2(syn)
             goto continue
         end
         print('############', p.address)
-
+        args[#args+1] = '#ERR '..p.address
 
         ::continue::
     end
@@ -842,6 +865,9 @@ local function decodeCodePoint(bytes, byte_i, bitness)
     if tbl_is_in(prefs, 0x66) then op_sz_attr=2 end
     code_point._op_sz_attr = op_sz_attr
 
+    local addr_sz_attr = bitness//8
+    if tbl_is_in(prefs, 0x67) then addr_sz_attr=addr_sz_attr//2 end
+    code_point._addr_sz_attr = addr_sz_attr
     local syntaxes = {}
     for i,s in ipairs(op.syns) do
         if ((s.op_szs and tbl_is_in(s.op_szs, op_sz_attr)) or not s.op_szs) and (not s.mod or s.mod == mod) then

@@ -15,11 +15,15 @@ local function decodeSolo(bytes)
     while b_i < size-16 do
         local cp = asm_db.decodeCodePoint(bytes, b_i, 64)
         if cp then
-            local s_bytes = ''
-            for i=1,cp.size do
-                s_bytes = s_bytes..('%02X'):format(bytes[i+b_i-1] or 0)..' '
+            local cptext = cp:textify()
+            if cp.debug then
+                disfile:write(cp.debug, ':  ')
+                local s_bytes = ''
+                for i=1,cp.size do
+                    s_bytes = s_bytes..('%02X'):format(bytes[i+b_i-1] or 0)..' '
+                end
+                disfile:write(('%06X'):format(b_i-1), ' - ', s_bytes, ' - ', cptext, '\n')
             end
-            disfile:write(('%06X'):format(b_i-1), ' - ', s_bytes, ' - ', cp:textify2(), '\n')
             b_i = b_i + cp.size
         else
             disfile:write('ERROR\n')
