@@ -14,27 +14,16 @@ local function decodeSolo(bytes)
     while b_i < size do
         local cp = asm_db.decodeCodePoint(bytes, b_i, 64)
         if cp then
-            local opname = type(cp.syns[1].mnem)=='table' and cp.syns[1].mnem[1] or cp.syns[1].mnem
             local s_bytes = ''
             for i=1,cp.size do
-                s_bytes = s_bytes..('%02X'):format(bytes[b_i+i-1])..' '
+                s_bytes = s_bytes..('%02X'):format(bytes[i+b_i-1] or 0)..' '
             end
-            local dispstr = cp._disp_value and ('%X'):format(cp._disp_value) or ''
-            disfile:write(('%06X'):format(b_i-1), ' - ', s_bytes, ' - ', opname..' '..dispstr, '\n')
+            disfile:write(('%06X'):format(b_i-1), ' - ', s_bytes, ' - ', cp:textify2(), '\n')
             b_i = b_i + cp.size
         else
             disfile:write('ERROR\n')
             b_i = b_i + 1
         end
-        -- local dec, modrm, dec_sz = asm_db.decodeFullOp(bytes, b_i, 64)
-        -- if dec then
-        --     -- disfile:write(('%06X'):format(b_i-1), ' - ', dec.syns[1].mnem, '\n')
-        --     disfile:write(('%06X'):format(b_i-1), ' - ', '\n')
-        --     b_i = b_i + dec_sz
-        -- else
-        --     disfile:write('ERROR\n')
-        --     b_i = b_i + 1
-        -- end
     end
 end
 
@@ -74,6 +63,6 @@ for i=1,1 do
 end
 -- ProFi:stop()
 print(os.clock()-t1)
-ProFi:writeReport( 'D:\\_dev\\lua\\disasm\\MyProfilingReport.txt' )
+-- ProFi:writeReport( 'D:\\_dev\\lua\\disasm\\MyProfilingReport.txt' )
 
 disfile:close()

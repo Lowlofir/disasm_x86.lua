@@ -625,7 +625,7 @@ local asm_regs_grps = { x87fpu='ST', mmx='MMX', xmm='XMM', ctrl='CR', debug='DR'
 local code_point_mt = {}
 code_point_mt.__index = code_point_mt
 
-local function textifyRegister(reg_i, reg_sz, rex) -- reg_i from 0, reg_sz from 1 to 8, rex is bool-tested
+local function textifyGenRegister(reg_i, reg_sz, rex) -- reg_i from 0, reg_sz from 1 to 8, rex is bool-tested
     if reg_i<8 then
         if reg_sz>=2 then
             local prefix = reg_sz<4 and '' or (reg_sz==4 and 'e' or 'r')
@@ -644,17 +644,17 @@ local function textifyRegister(reg_i, reg_sz, rex) -- reg_i from 0, reg_sz from 
     end
 end
 
-local function textifyRegister2(reg_i, reg_sz, rex, reg_group) -- reg_i from 0, reg_sz from 1 to 8, rex is bool-tested
+local function textifyRegister(reg_i, reg_sz, rex, reg_group) -- reg_i from 0, reg_sz from 1 to 8, rex is bool-tested
     assert(reg_i)
     assert(reg_sz)
     assert(type(reg_group) == 'string')
-    if reg_group=='gen' then return textifyRegister(reg_i, reg_sz, rex) 
+    if reg_group=='gen' then return textifyGenRegister(reg_i, reg_sz, rex) 
     elseif reg_group=='seg' then
-        return asm_regs_seg[reg_i%8]
+        return asm_regs_seg[reg_i%8+1]
     elseif asm_regs_grps[reg_group] then
         return asm_regs_grps[reg_group]..tostring(reg_i)
     else
-        print('textifyRegister2 failed on ', tostring(reg_i), tostring(reg_sz), tostring(rex), tostring(reg_group))
+        print('textifyRegister2 out of groups on ', tostring(reg_i), tostring(reg_sz), tostring(rex), tostring(reg_group))
     end
 end
 
@@ -669,7 +669,7 @@ function code_point_mt:textify(syn_i)
         if type(self.modrm.rm)=='string' then 
             rm_reg = self.modrm.rm
         elseif self.modrm.rm then
-            rm_reg = textifyRegister(self.modrm.rm, self._op_sz_attr, self.prefs.rex)
+            rm_reg = textifyGenRegister(self.modrm.rm, self._op_sz_attr, self.prefs.rex)
         end
         if rm_reg and (self.modrm.disp or 0)>0 then
             rm_reg = '['..rm_reg..(self._disp_value>0 and '+' or '')..tostring(self._disp_value)..']'
@@ -677,7 +677,7 @@ function code_point_mt:textify(syn_i)
             rm_reg = '['..rm_reg..']'
         end
 
-        local reg_reg = textifyRegister(self.modrm.reg, self._op_sz_attr, self.prefs.rex)
+        local reg_reg = textifyGenRegister(self.modrm.reg, self._op_sz_attr, self.prefs.rex)
         
 
         if op.bit_dir==0 then
@@ -719,14 +719,18 @@ function code_point_mt:textify2(syn)
 
         if not p.address then
             assert(p.value)
-            args[#args+1] = p.value
+            if p.nr then
+                args[#args+1] = textifyRegister(tonumber(p.nr), self._op_sz_attr, self.prefs.rex, p.group)
+            else
+                args[#args+1] = p.value
+            end
             i=i+1
             goto continue
         end
 
         if p.address=='Z' then
             local reg = self._Z
-            args[#args+1] = textifyRegister(reg, self._op_sz_attr, self.prefs.rex)
+            args[#args+1] = textifyGenRegister(reg, self._op_sz_attr, self.prefs.rex)
             goto continue
         end
 
@@ -734,7 +738,7 @@ function code_point_mt:textify2(syn)
         local reg_lp = asm_addr_reg[p.address]
         if reg_lp then
             assert(self.modrm)
-            args[#args+1] = textifyRegister2(self.modrm.reg, self._op_sz_attr, self.prefs.rex, reg_lp)
+            args[#args+1] = textifyRegister(self.modrm.reg, self._op_sz_attr, self.prefs.rex, reg_lp)
             goto continue
         end
         local rm_lp = asm_addr_rm[p.address]
@@ -746,11 +750,14 @@ function code_point_mt:textify2(syn)
             if self.modrm.disp then  -- mod != 11
                 local a
                 if not self.modrm.sib then  -- no SIB
+                    local disp_str = self._disp_value and to_shex(self._disp_value, true) or ''
                     if self.modrm.rm=='0' then
-                        a = ('[%X]'):format(self._disp_value)
+                        a = ('[%s]'):format(disp_str)
+                    elseif type(self.modrm.rm)=='string' then
+                        a = ('[%s%s]'):format(self.modrm.rm, disp_str)
                     else
-                        local rs = textifyRegister2(self.modrm.rm, self._op_sz_attr, self.prefs.rex, rm_lp[1] and rm_lp[1] or 'gen')
-                        a = ('[%s+%X]'):format(rs, self._disp_value)
+                        local rs = textifyRegister(self.modrm.rm, self._op_sz_attr, self.prefs.rex, rm_lp[1]~='mem' and rm_lp[1] or 'gen')
+                        a = ('[%s%s]'):format(rs, disp_str)
                     end
                 else  -- SIB
                     a = '[SIB]'
@@ -759,7 +766,7 @@ function code_point_mt:textify2(syn)
                 args[#args+1] = a
                 goto continue
             else                   -- mod == 11
-                args[#args+1] = textifyRegister2(self.modrm.rm or self._Z, self._op_sz_attr, self.prefs.rex, rm_lp[1] and rm_lp[1] or 'gen')
+                args[#args+1] = textifyRegister(self.modrm.rm or self._Z, self._op_sz_attr, self.prefs.rex, rm_lp[1]~='mem' and rm_lp[1] or 'gen')
                 goto continue
             end
         end
@@ -774,7 +781,7 @@ function code_point_mt:textify2(syn)
                 a = to_shex(val, true)
             elseif p.address=='O' then
                 assert(not self.modrm)
-                a = to_shex(val)
+                a = ('[%X]'):format(val)
             end
             args[#args+1] = a
             goto continue
@@ -794,7 +801,6 @@ local function decodeCodePoint(bytes, byte_i, bitness)
     if not op then return end
     local disp_value
     if modrm and modrm.disp and modrm.disp>0 then
-        -- print(table2str(modrm))
         disp_value = readToNumber(bytes, byte_i, modrm.disp)
         byte_i = byte_i + modrm.disp
     end
