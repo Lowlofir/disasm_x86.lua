@@ -709,13 +709,14 @@ function code_point_mt:textifySib()
     end
     local b2
     if sib.s~=0 then
-        b2 = (b1 and '+' or '')..textifyGenRegister(sib.index, self._addr_sz_attr, self.prefs.rex)..'*'..tostring(sib.s)
+        b2 = (b1 and '+' or '')..textifyGenRegister(sib.index, self._addr_sz_attr, self.prefs.rex)
+        if sib.s>1 then b2=b2..'*'..tostring(sib.s) end
     end
     local b3
     if disp_v and disp_v>0 then
         b3 = to_shex(disp_v, true)
     end
-    self.debug= 'sib'
+    -- self.debug= 'sib'
     return '['..(b1 or '')..(b2 or '')..(b3 or '')..']'
 end
 
