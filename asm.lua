@@ -786,7 +786,16 @@ function code_point_mt:textify2(syn)
             args[#args+1] = a
             goto continue
         end
+
+        if p.nr then
+            args[#args+1] = textifyRegister(tonumber(p.nr), self._op_sz_attr, self.prefs.rex, p.group)
+            goto continue
+        elseif p.value then
+            args[#args+1] = p.value
+            goto continue
+        end
         print('############', p.address)
+
 
         ::continue::
     end
@@ -839,8 +848,22 @@ local function decodeCodePoint(bytes, byte_i, bitness)
             syntaxes[#syntaxes+1] = s
         end
     end
+    if #syntaxes==0 then
+        for i,s in ipairs(op.syns) do
+            if op_sz_attr==8 and s.op_szs and not tbl_is_in(s.op_szs, op_sz_attr) then
+                syntaxes[#syntaxes+1] = s
+            end
+        end
+    end
     code_point.syns = syntaxes
-    assert(#syntaxes>0)
+    if #syntaxes==0 then
+        local s_bytes = ''
+        for i=1,code_point.size do
+            s_bytes = s_bytes..('%02X'):format(bytes[i+byte_i_0-1] or 0)..' '
+        end
+
+        error(s_bytes..'\n'..table2str(op))
+    end
 
     return code_point
 end

@@ -1,6 +1,7 @@
 -- local opaddr, bytestr, opcode = dis:match('^(%S+) %- ([%x ]+) %- (.+)$')
 
-local ProFi = dofile 'D:\\_dev\\lua\\disasm\\ProFi.lua'
+-- local ProFi = dofile 'D:\\_dev\\lua\\disasm\\ProFi.lua'
+-- local profiler = require("profiler")
 
 -- t1 = os.clock()
 local asm_db = dofile 'D:\\_dev\\lua\\disasm\\asm.lua'
@@ -11,7 +12,7 @@ local disfile = io.open('D:\\_dev\\lua\\disasm\\disasm.asm' , 'w')
 local function decodeSolo(bytes)
     local b_i = 1
     local size = #bytes
-    while b_i < size do
+    while b_i < size-16 do
         local cp = asm_db.decodeCodePoint(bytes, b_i, 64)
         if cp then
             local s_bytes = ''
@@ -52,17 +53,19 @@ assert(bytes_read==#filedata_s)
 
 -- assert(reg)
 -- ProFi:start()
+-- profiler.start()
 t1 = os.clock()
 -- for i=1,#filedata_arr do
-for i=1,1 do
+for i=1,#filedata_arr do
     xpcall( decodeSolo, function (err) print(err..'\n',debug.traceback()) end, filedata_arr[i])
     if os.clock()-t1 > 10 then
-        print('break')
+        print('break', i)
         break
     end
 end
 -- ProFi:stop()
+-- profiler.stop()
 print(os.clock()-t1)
 -- ProFi:writeReport( 'D:\\_dev\\lua\\disasm\\MyProfilingReport.txt' )
-
+-- profiler.report("profiler.log")
 disfile:close()
