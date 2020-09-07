@@ -16,7 +16,6 @@ local file = io.open('D:\\_dev\\lua\\disasm\\disasm.asm' , 'w')
 local tnative = 0
 local function disasm_region(addr0, size, file)
     local addr = addr0
-    -- file:write(('%X'):format(addr), '\n')
     local disasm = createDisassembler()
     for i=1,size do
         local t1 = os.clock()
@@ -25,18 +24,24 @@ local function disasm_region(addr0, size, file)
         tnative = tnative + (os.clock()-t1)
         
         local bytestbl, opcode = disdata.bytes, disdata.opcode
-        file:write(dis, '\n')
+        -- file:write(dis, '\n')
 
         local cp = asm_db.decodeCodePoint(bytestbl, 1, targetIs64Bit() and 64 or 32)
         if cp then
-            if cp.size~=#bytestbl then file:write('SZ ERROR\n') end
-            local s_bytes = ''
-            for i=1,cp.size do
-                s_bytes = s_bytes..('%02X'):format(bytestbl[i] or 0)..' '
+            local cptext = cp:textify()
+            if cp.debug then
+                file:write(dis, '\n')
+                file:write(cp.debug, ':  ')
+                if cp.size~=#bytestbl then file:write('SZ ERROR\n') end
+                local s_bytes = ''
+                for i=1,cp.size do
+                    s_bytes = s_bytes..('%02X'):format(bytestbl[i] or 0)..' '
+                end
+                local dispstr = cp._disp_value and ('%X'):format(cp._disp_value) or ''
+                file:write(s_bytes, ' - ', cptext, '\n')
             end
-            local dispstr = cp._disp_value and ('%X'):format(cp._disp_value) or ''
-            file:write(s_bytes, ' - ', cp:textify2(), '\n')
         else
+            file:write(dis, '\n')
             file:write('ERROR\n')
         end
 

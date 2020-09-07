@@ -406,19 +406,20 @@ local function search_decoding_level_1(level, byte)
     return nexts
 end
 
-local function decode_prefixes(bytes, byte_i)
+local function decode_prefixes(bytes, byte_i, bitness)
     local prefs = {}
     for i=1,16 do
         local b = bytes[byte_i]
         if not b then            -- no more bytes
             return prefs, byte_i 
         end  
-        if b&0xF0 == 0x40 then
+        if bitness==64 and b&0xF0 == 0x40 then
             prefs.rex = b
             byte_i = byte_i + 1
             goto cont
         end
-        if asm_pref_map[b] then
+        local pref = asm_pref_map[b]
+        if pref and not (bitness==32 and pref.only_64) then
             table.insert(prefs, b)
             byte_i = byte_i + 1
         else
@@ -431,7 +432,7 @@ end
 
 function module.decodeOp(bytes, byte_i, bitness)
     -- assert(asm_decoding_map)
-    local prefs, byte_i = decode_prefixes(bytes, byte_i)
+    local prefs, byte_i = decode_prefixes(bytes, byte_i, bitness)
     local ops = {}
     if #prefs>0 then
         local lvls
@@ -478,8 +479,8 @@ local function decodeOpInitial(bytes, byte_i, bitness)
         for i=0, 7 do
             s=s..('%X'):format(bytes[byte_i_0+i])..' '
         end
-        -- print(s)
-        -- print(table2str(ops))
+        print(s)
+        print(table2str(ops))
         return
     end
     local maxbi = #bytes
@@ -487,6 +488,7 @@ local function decodeOpInitial(bytes, byte_i, bitness)
     -- assert(#ops==1)
     local op = ops[1]
     byte_i = byte_i + op.opcd_sz
+    assert(bytes[byte_i-1], #bytes..' '..byte_i)
     local Z = bytes[byte_i-1] & 7
     local modrm
     local sib 
@@ -575,7 +577,6 @@ function module.decodeFullOp(bytes, byte_i, bitness)
     end
     return op, modrm, byte_i-byte_i_0
 end
--- module.decodeFullOp = profiled(module.decodeFullOp, 'decodeFullOp')
 
 local function readToNumber(bytes, byte_i, b_n)
     local value = 0
@@ -659,7 +660,7 @@ local function textifyRegister(reg_i, reg_sz, rex, reg_group) -- reg_i from 0, r
 end
 
 
-function code_point_mt:textifyPrimitive(syn_i)
+function code_point_mt:textifyV0(syn_i)
     local syn = self.syns[syn_i or 1]
     local op = self.op
     local opname = type(syn.mnem)=='table' and table.concat(syn.mnem, '/') or syn.mnem
@@ -701,7 +702,7 @@ end
 function code_point_mt:textifySib()
     local sib = self.modrm.sib
     local disp_v = self._disp_value
-    assert(sib)
+    -- assert(sib)
 
     local b1
     if sib.base then
@@ -734,25 +735,26 @@ function code_point_mt:textify(syn)
     local opname = type(syn.mnem)=='table' and table.concat(syn.mnem, '/') or syn.mnem
     
     local args = {}
-    local i = 0
     local imm_i = 1
     for _, p in ipairs(syn.params) do
         if p.hidden then goto continue end
 
+        local op_sz = type(p.vtype)=='table' and p.vtype[self._op_sz_attr] or p.vtype
+
         if not p.address then
             assert(p.value)
             if p.nr then
-                args[#args+1] = textifyRegister(tonumber(p.nr), self._op_sz_attr, self.prefs.rex, p.group)
+                args[#args+1] = textifyRegister(tonumber(p.nr), op_sz, self.prefs.rex, p.group)
             else
                 args[#args+1] = p.value
             end
-            i=i+1
             goto continue
         end
 
         if p.address=='Z' then
             local reg = self._Z
-            args[#args+1] = textifyGenRegister(reg, self._op_sz_attr, self.prefs.rex)
+            args[#args+1] = textifyGenRegister(reg, op_sz, self.prefs.rex)
+            self.debug = 'Z'
             goto continue
         end
 
@@ -760,7 +762,7 @@ function code_point_mt:textify(syn)
         local reg_lp = asm_addr_reg[p.address]
         if reg_lp then
             assert(self.modrm)
-            args[#args+1] = textifyRegister(self.modrm.reg, self._op_sz_attr, self.prefs.rex, reg_lp)
+            args[#args+1] = textifyRegister(self.modrm.reg, op_sz, self.prefs.rex, reg_lp)
             goto continue
         end
         local rm_lp = asm_addr_rm[p.address]
@@ -778,19 +780,17 @@ function code_point_mt:textify(syn)
                     elseif type(self.modrm.rm)=='string' then
                         a = ('[%s%s]'):format(self.modrm.rm, disp_str)
                     else
-                        local rs = textifyRegister(self.modrm.rm, self._op_sz_attr, self.prefs.rex, rm_lp[1]~='mem' and rm_lp[1] or 'gen')
+                        local rs = textifyRegister(self.modrm.rm, self._addr_sz_attr, self.prefs.rex, rm_lp[1]~='mem' and rm_lp[1] or 'gen')
                         a = ('[%s%s]'):format(rs, disp_str)
                     end
                 else  -- SIB
-                    -- print('presib')
                     a = self:textifySib()
-                    -- print('postsib')
                 end
                 assert(a)
                 args[#args+1] = a
                 goto continue
             else                   -- mod == 11
-                args[#args+1] = textifyRegister(self.modrm.rm or self._Z, self._op_sz_attr, self.prefs.rex, rm_lp[1]~='mem' and rm_lp[1] or 'gen')
+                args[#args+1] = textifyRegister(self.modrm.rm or self._Z, op_sz, self.prefs.rex, rm_lp[1]~='mem' and rm_lp[1] or 'gen')
                 goto continue
             end
         end

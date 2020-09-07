@@ -32,6 +32,30 @@ local function decodeSolo(bytes)
     end
 end
 
+local function decodeString(str)
+    local bytes = setmetatable({ s = str }, {
+        __index = function (t, i)
+            return t.s:byte(i)
+        end,
+        __len = function (t)
+            return #t.s
+        end
+    })
+    return decodeSolo(bytes)
+end
+
+local function decodeBytesViaMt(bytes)
+    local metabytes = setmetatable({ b = bytes }, {
+        __index = function (t, i)
+            return t.b[i]
+        end,
+        __len = function (t)
+            return #t.b
+        end
+    })
+    return decodeSolo(metabytes)
+end
+
 -- ProFi:start()
 local t1 = os.clock()
 local file = io.open('D:\\_dev\\lua\\disasm\\mcode.bin' , 'rb')
@@ -55,14 +79,16 @@ assert(bytes_read==#filedata_s)
 -- ProFi:stop()
 
 
--- assert(reg)
+
+
 -- ProFi:start()
 -- profiler.start()
 t1 = os.clock()
--- for i=1,#filedata_arr do
+-- decodeString(filedata_s)
 for i=1,#filedata_arr do
     xpcall( decodeSolo, function (err) print(err..'\n',debug.traceback()) end, filedata_arr[i])
-    if os.clock()-t1 > 10 then
+    -- xpcall( decodeBytesViaMt, function (err) print(err..'\n',debug.traceback()) end, filedata_arr[i])
+    if os.clock()-t1 > 45 then
         print('break', i)
         break
     end
