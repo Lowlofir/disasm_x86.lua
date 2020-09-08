@@ -754,7 +754,7 @@ function code_point_mt:textify(syn)
         if p.address=='Z' then
             local reg = self._Z + (((self.prefs.rex or 0)&1)<<3)   -- REX.B
             args[#args+1] = textifyGenRegister(reg, op_sz, self.prefs.rex)
-            self.debug = 'Z'
+            -- self.debug = 'Z'
             goto continue
         end
 

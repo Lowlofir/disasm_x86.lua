@@ -1,3 +1,4 @@
+-- require("luacov.tick")
 -- local opaddr, bytestr, opcode = dis:match('^(%S+) %- ([%x ]+) %- (.+)$')
 
 -- t1 = os.clock()
