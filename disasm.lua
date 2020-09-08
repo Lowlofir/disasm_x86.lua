@@ -51,8 +51,10 @@ local function disasm_region(addr0, size, file)
 end
 
 local function scan_thr(thr)
+    local maxi = 1000
+    local up = maxi<#funcs-1 and maxi or #funcs-1
     local t0 = os.clock()
-    for i=20,1000 do
+    for i=20,up do
         if os.clock()-t0 >= 1 then 
             print('.')
             t0 = os.clock()
