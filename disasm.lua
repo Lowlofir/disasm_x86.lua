@@ -26,7 +26,7 @@ local function disasm_region(addr0, size, file)
         local bytestbl, opcode = disdata.bytes, disdata.opcode
         -- file:write(dis, '\n')
 
-        local cp = asm_db.decodeCodePoint(bytestbl, 1, targetIs64Bit() and 64 or 32)
+        local cp = asm_db.decodeCodePoint(readBytes(addr, 16, true), 1, targetIs64Bit() and 64 or 32)
         if cp then
             local cptext = cp:textify()
             if cp.debug then
@@ -52,7 +52,7 @@ end
 
 local function scan_thr(thr)
     local t0 = os.clock()
-    for i=20,100 do
+    for i=20,1000 do
         if os.clock()-t0 >= 1 then 
             print('.')
             t0 = os.clock()

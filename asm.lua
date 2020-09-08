@@ -634,8 +634,8 @@ local function textifyGenRegister(reg_i, reg_sz, rex) -- reg_i from 0, reg_sz fr
         else
             local reg_lh = 'l'
             if not rex then 
+                reg_lh = (reg_i&4)~=0 and 'h' or 'l'
                 reg_i = reg_i%4 
-                reg_lh = reg_i//4>0 and 'h' or 'l'
             end
             return asm_regs2[reg_i+1]..reg_lh
         end
@@ -752,7 +752,7 @@ function code_point_mt:textify(syn)
         end
 
         if p.address=='Z' then
-            local reg = self._Z
+            local reg = self._Z + (((self.prefs.rex or 0)&1)<<3)   -- REX.B
             args[#args+1] = textifyGenRegister(reg, op_sz, self.prefs.rex)
             self.debug = 'Z'
             goto continue
@@ -790,7 +790,8 @@ function code_point_mt:textify(syn)
                 args[#args+1] = a
                 goto continue
             else                   -- mod == 11
-                args[#args+1] = textifyRegister(self.modrm.rm or self._Z, op_sz, self.prefs.rex, rm_lp[1]~='mem' and rm_lp[1] or 'gen')
+
+                args[#args+1] = textifyRegister(self.modrm.rm, op_sz, self.prefs.rex, rm_lp[1]~='mem' and rm_lp[1] or 'gen')
                 goto continue
             end
         end
