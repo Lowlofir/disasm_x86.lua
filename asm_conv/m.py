@@ -260,6 +260,10 @@ def extract():
 def process(els: List[wdict]):
     # def print_signature(s):
     #     print('{}, {}, {}, {}'.format(s[0].hex(), s[1].hex(), s[2], s[3]))
+    for el in els:
+        if el.opcd_sec and el.opcd_ext:
+            assert el.opcd_ext<<3 == el.opcd_sec&(7<<3)
+            del el['opcd_ext']
 
     def make_signature(s, *args):
         def intlist_to_bytes(l, s):
@@ -284,7 +288,7 @@ def process(els: List[wdict]):
                 bytelst.append((dm.opcd_pri, ~0))
             if dm.opcd_sec:
                 bytelst.append((dm.opcd_sec, ~0))
-            if dm.opcd_ext:
+            if not dm.opcd_sec and dm.opcd_ext:   # opcd_sec means no real ext
                 bytelst.append((dm.opcd_ext<<3, ~(7<<3)))
             el.btuple = make_signature(bytelst, dm.opcd_mod, dm.only_64, dm.attr, dm.particular)
 
@@ -485,8 +489,8 @@ def process(els: List[wdict]):
                     print('parvtypes anomaly:',el.btuple[0], el.btuple[3])
                     parvtypes[0].update(*parvtypes[1:])
                 synvtypes.append(parvtypes[0] if parvtypes else None)
-            if any(synvt==None for synvt in synvtypes) and not all(synvt==None for synvt in synvtypes):
-                print('synvtypes anomaly:',el.btuple[0], el.btuple[3])
+            # if any(synvt==None for synvt in synvtypes) and not all(synvt==None for synvt in synvtypes):
+            #     print('synvtypes anomaly:',el.btuple[0], el.btuple[3])
 
     for el in els:
         for syn in el.syns:
