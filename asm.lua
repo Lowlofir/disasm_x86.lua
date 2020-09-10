@@ -25,27 +25,6 @@ end
 
 local asm_db = dofile 'D:\\_dev\\lua\\disasm\\asm_conv\\asm_db.lua'
 
-local asm_mnem_map = {}
-local function create_mnem_map()
-    for _,el in ipairs(asm_db.opcodes) do
-        for syn_i, syn in ipairs(el.syns) do
-            if not syn.mnem then goto continue end
-            local t = { opcode = el, syn_i = syn_i }
-            local lmnem = syn.mnem:lower()
-            
-            if not asm_mnem_map[lmnem] then
-                asm_mnem_map[lmnem] = { [el] = {syn} }
-            else
-                asm_mnem_map[lmnem][el] = asm_mnem_map[lmnem][el] or {}
-                table.insert(asm_mnem_map[lmnem][el], syn)
-            end
-            ::continue::
-        end
-    end
-end
-
--- create_mnem_map = profiled(create_mnem_map, 'create_mnem_map')
--- create_mnem_map()
 
 local asm_pref_map = {}
 for _,el in ipairs(asm_db.prefixes) do
@@ -114,7 +93,6 @@ local function make_decoding_map()
     return makeLevel(fsts)
 end
 
--- make_decoding_map = profiled(make_decoding_map, 'make_decoding_map')
 local asm_decoding_map = make_decoding_map()
 assert(asm_decoding_map)
 
@@ -210,49 +188,6 @@ local function opsEqualExceptBitness(op1, op2)
 end
 
 
-local function intermatch(op_recs, bitness)
-    local new_recs = {}
-    for _, op_rec in ipairs(op_recs) do
-        local op = op_rec[1]
-        if op.opcd_pref and asm_pref_map[op.opcd_pref] then
-            for _,op_rec2 in ipairs(op_recs) do
-                local op2 = op_rec2[1]
-                if not opsEqualExceptPrefix(op, op2) or op.opcd_pref==op2.opcd_pref then
-                    table.insert(new_recs, op_rec2)
-                end
-            end
-            op_recs = new_recs
-            break
-        end
-    end
-    if not bitness then return op_recs end
-
-    local bitp = 'only_'..tostring(bitness)
-    local bit_dominator
-    for _, op_rec in ipairs(op_recs) do
-        local op = op_rec[1]
-        if op[bitp] then
-            bit_dominator = op
-            break
-        end
-    end
-
-    if bit_dominator then
-        new_recs = {}
-        for _, op_rec in ipairs(op_recs) do
-            local op = op_rec[1]
-            if not opsEqualExceptBitness(bit_dominator, op) or (bit_dominator[bitp] and op[bitp]) then
-                table.insert(new_recs, op_rec)
-            end
-        end
-        op_recs = new_recs
-    end
-
-    return op_recs
-end
--- intermatch = profiled(intermatch, 'intermatch')
-
-
 local function intermatch_nr(ops, bitness)
     local new_ops = {}
     for i=1,#ops do
@@ -314,9 +249,6 @@ local function intermatch_nr(ops, bitness)
 
     return ops
 end
-
--- intermatch_nr = profiled(intermatch_nr, 'intermatch_nr')
-
 
 
 local function calcOpSizes(rex, x66, x67, bitmode)
@@ -430,7 +362,7 @@ local function decode_prefixes(bytes, byte_i, bitness)
     return prefs, byte_i
 end
 
-function module.decodeOp(bytes, byte_i, bitness)
+local function decodeOp(bytes, byte_i, bitness)
     -- assert(asm_decoding_map)
     local prefs, byte_i = decode_prefixes(bytes, byte_i, bitness)
     local ops = {}
@@ -472,7 +404,7 @@ end
 
 local function decodeOpInitial(bytes, byte_i, bitness)
     local byte_i_0 = byte_i
-    local ops, byte_i, prefs = module.decodeOp(bytes, byte_i, bitness)
+    local ops, byte_i, prefs = decodeOp(bytes, byte_i, bitness)
     if #ops==0 then return end
     if #ops~=1 then
         local s=''
@@ -541,7 +473,7 @@ local function countImmsBytes(op, prefs, bitness)
     return byte_i
 end
 
-function module.decodeFullOp(bytes, byte_i, bitness)
+local function decodeFullOp(bytes, byte_i, bitness)
     local byte_i_0 = byte_i
     local op, modrm, prefs, byte_i = decodeOpInitial(bytes, byte_i, bitness)
     if modrm.disp then
@@ -901,33 +833,6 @@ local function decodeCodePoint(bytes, byte_i, bitness)
 end
 
 module.decodeCodePoint = decodeCodePoint
-
-
-function module.find(opname, bytearr, bitness)
-    local st = {}
-    if opname=='ret' then opname = 'retn' end
-    if opname=='int 3' then opname = 'int' end
-
-    local op_recs = asm_mnem_map[opname]
-    if not op_recs then prints(st, 'not op_recs') return end
-
-    local ops_r2 = {}
-    local ops_n = 0
-    for op, syns in pairs(op_recs) do
-        if match_to_opcode(op, bytearr) then
-            ops_r2[#ops_r2+1] = {op, syns}
-        end
-        ops_n=ops_n+1
-    end
-    if #ops_r2>1 and opname~='nop' then
-        prints(st, ops_n)
-        prints(st, 'F:',#ops_r2)
-        ops_r2 = intermatch(ops_r2, bitness)
-        prints(st, 'FF:',#ops_r2)
-    end
-
-    return ops_r2, table.concat(st, '\n')..'\n'
-end
 
 
 return module
