@@ -246,6 +246,9 @@ def extract():
                 if modrm_req:
                     el['modrm'] = True
 
+            if el_is_prefix and el.opcd_pri==0x9B:  # drop WAIT prefix!
+                continue
+
             if el_is_prefix:
                 pri_opcd_prefs.append(el)
             else:
@@ -442,7 +445,7 @@ def process(els: List[wdict]):
 
     # pprint([ (e.btuple[0],e.btuple[3]) for e in els if len(e.syns)>1 and all(s.mod==e.syns[0].mod for s in e.syns)])
 
-    vtypes_tbl = { 'wo': {2}, 'do': {4}, 'qp': {8}, 'v': {2,4}, 'vds':{2,4,8}, 'vq':{4,2}, 'vqp':{2,4,8}, 'vs':{2,4}, \
+    vtypes_tbl = { 'wo': {2}, 'do': {4}, 'qp': {8}, 'v': {2,4}, 'vds':{2,4,8}, 'vq':{4,2}, 'vqp':{2,4,8}, 'vs':{2,4},
                    'dqp':{4,8}, 'p':{2,4}, 'ptp':{2,4,8} }
 
     def code_vtype(vtype) -> Optional[Union[dict, int]]:
