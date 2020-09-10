@@ -93,7 +93,7 @@ t1 = os.clock()
 for i=1,#filedata_arr do
     xpcall( decodeSolo, function (err) print(err..'\n',debug.traceback()) end, filedata_arr[i])
     -- xpcall( decodeBytesViaMt, function (err) print(err..'\n',debug.traceback()) end, filedata_arr[i])
-    if os.clock()-t1 > 20 then
+    if os.clock()-t1 > 30 then
         print('break', i)
         break
     end

@@ -647,7 +647,7 @@ end
 
 local function textifyRegister(reg_i, reg_sz, rex, reg_group) -- reg_i from 0, reg_sz from 1 to 8, rex is bool-tested
     assert(reg_i)
-    assert(reg_sz)
+    -- assert(reg_sz)  can be nil for non-gen registers
     assert(type(reg_group) == 'string')
     if reg_group=='gen' then return textifyGenRegister(reg_i, reg_sz, rex) 
     elseif reg_group=='seg' then
@@ -733,13 +733,17 @@ function code_point_mt:textify(syn)
     local syn = syn or self.syns[1]
     local op = self.op
     local opname = type(syn.mnem)=='table' and table.concat(syn.mnem, '/') or syn.mnem
-    
+    assert(type(opname)=='string')
+
     local args = {}
     local imm_i = 1
     for _, p in ipairs(syn.params) do
         if p.hidden then goto continue end
 
-        local op_sz = type(p.vtype)=='table' and p.vtype[self._op_sz_attr] or p.vtype
+        local op_sz = type(p.vtype)=='table' and (p.vtype[self._op_sz_attr] or p.vtype[4]) or p.vtype --or self._op_sz_attr
+        if type(op_sz)=='table' then
+            print(op.opcd_pri, op.opcd_sz, op_sz and table2str(op_sz) or 'nil')
+        end
 
         if not p.address then
             assert(p.value)
