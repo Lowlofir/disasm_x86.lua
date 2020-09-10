@@ -106,53 +106,6 @@ local function tbl_is_in(t, o)
     return false
 end
 
-local function match_to_opcode(op, bytes)
-    local bi = 1
-    if op.opcd_pref and bytes[bi]==op.opcd_pref then
-        -- print('opcd_pref', op.opcd_pref)
-        bi = bi + 1
-    elseif op.opcd_pref then
-        return false
-    end
-    if asm_pref_map[bytes[bi]] then  -- prefixes
-        bi=bi+1
-        if asm_pref_map[bytes[bi]] then  -- prefixes
-            bi=bi+1
-        end
-    end
-    if op.opcd_sz==2 and bytes[bi]==0x0F then
-        bi = bi + 1
-    elseif op.opcd_sz==2 then
-        return false
-    end
-    if not op.opcd_pri or not bytes[bi] then
-        for k,v in pairs(op) do
-            print(k,tostring(v))
-        end
-        local s = ''
-        for i,v in ipairs(bytes) do
-            s=s..('%X'):format(v)..' '
-        end
-        print(s)
-        print('bi=',bi)
-        return false
-        -- error('not bytes[bi]')
-    end
-    local bfmask = op.opcd_bitfields and ~op.opcd_bitfields or ~0
-    if (bytes[bi] & bfmask)==op.opcd_pri then
-        bi = bi + 1
-    else
-        return false
-    end
-    if op.opcd_ext and ((bytes[bi] & 7<<3) ~ (op.opcd_ext<<3))==0 then
-        
-    elseif op.opcd_ext then
-        return false
-    end
-    return true
-end
-
-
 local function prints(st, ...)
     assert(type(st)=='table')
     local t = {}
