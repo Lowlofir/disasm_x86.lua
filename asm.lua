@@ -532,7 +532,7 @@ end
 
 local function textifyRegister(reg_i, reg_sz, rex, reg_group) -- reg_i from 0, reg_sz from 1 to 8, rex is bool-tested
     assert(reg_i)
-    -- assert(reg_sz)  can be nil for non-gen registers
+    assert(reg_sz or reg_group~='gen')  -- can be nil for non-gen registers
     assert(type(reg_group) == 'string')
     if reg_group=='gen' then return textifyGenRegister(reg_i, reg_sz, rex) 
     elseif reg_group=='seg' then
