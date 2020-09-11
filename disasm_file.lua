@@ -1,9 +1,5 @@
 -- require("luacov")
 
-
-
--- local opaddr, bytestr, opcode = dis:match('^(%S+) %- ([%x ]+) %- (.+)$')
-
 -- local ProFi = dofile 'D:\\_dev\\lua\\disasm\\ProFi.lua'
 -- local profiler = require("profiler")
 
@@ -17,8 +13,9 @@ local disfile = io.open('D:\\_dev\\lua\\disasm\\disasm.asm' , 'w')
 local function decodeDirect(bytes)
     local b_i = 1
     local size = #bytes
-    while b_i < size-16 do
-        local cp = asm_db.decodeCodePoint(bytes, b_i, 64)
+    while b_i <= size do
+
+        local cp, err = asm_db.decodeCodePoint(bytes, b_i, 64)
         if cp then
             local cptext = cp:textify()
             if cp.debug then
@@ -28,7 +25,7 @@ local function decodeDirect(bytes)
             end
             b_i = b_i + cp.size
         else
-            disfile:write('ERROR\n')
+            disfile:write('ERROR '..(err or 'no err')..'\n')
             b_i = b_i + 1
         end
     end
@@ -88,8 +85,9 @@ assert(bytes_read==#filedata_s)
 t1 = os.clock()
 -- decodeString(filedata_s)
 for i=1,#filedata_arr do
-    xpcall( decodeDirect, function (err) print(err..'\n',debug.traceback()) end, filedata_arr[i])
+    -- xpcall( decodeDirect, function (err) print(err..'\n',debug.traceback()) end, filedata_arr[i])
     -- xpcall( decodeBytesViaMt, function (err) print(err..'\n',debug.traceback()) end, filedata_arr[i])
+    xpcall( decodeString, function (err) print(err..'\n',debug.traceback()) end, filedata_s)
     if os.clock()-t1 > 30 then
         print('break', i)
         break

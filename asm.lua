@@ -514,7 +514,7 @@ local function readToNumber(bytes, byte_i, b_n)
     return value - (value&1<<(b_n*8-1))*2
 end
 
-local function readImm(imm, bytes, byte_i, prefs, bitness)
+local function calcImmSize(imm, bytes, byte_i, prefs, bitness)
     local imm_sz = imm.s
     if imm.s == 'addr' then
         imm_sz = bitness//8
@@ -538,7 +538,7 @@ local function readImm(imm, bytes, byte_i, prefs, bitness)
             end
         end
     end
-    return readToNumber(bytes, byte_i, imm_sz), imm_sz
+    return imm_sz    
 end
 
 local asm_regs = { 'ax', 'cx', 'dx', 'bx', 'sp', 'bp', 'si', 'di' }
@@ -760,10 +760,14 @@ end
 
 local function decodeCodePoint(bytes, byte_i, bitness)
     local byte_i_0 = byte_i
+    local byte_i_max = #bytes
     local op, modrm, prefs, byte_i, Z = decodeOpInitial(bytes, byte_i, bitness)
-    if not op then return end
+    if not op then return nil, 'no op match' end
     local disp_value
     if modrm and modrm.disp and modrm.disp>0 then
+        if byte_i+modrm.disp+1>byte_i_max then
+            return nil, 'ned 1'
+        end
         disp_value = readToNumber(bytes, byte_i, modrm.disp)
         byte_i = byte_i + modrm.disp
     end
@@ -771,8 +775,11 @@ local function decodeCodePoint(bytes, byte_i, bitness)
     if op.imms then
         imm_values = {}
         for i=1,#op.imms do
-            local sz
-            imm_values[i], sz = readImm(op.imms[i], bytes, byte_i, prefs, bitness)
+            local sz = calcImmSize(op.imms[i], bytes, byte_i, prefs, bitness)
+            if byte_i+sz+1>byte_i_max then
+                return nil, 'ned 2'
+            end    
+            imm_values[i] = readToNumber(bytes, byte_i, sz)
             byte_i = byte_i + sz
         end
     end
@@ -787,27 +794,28 @@ local function decodeCodePoint(bytes, byte_i, bitness)
     code_point._imm_values = imm_values
     code_point._Z = Z
 
+    local rexw = (prefs.rex or 0)&8 ~= 0
+    local op_sz_attr = rexw and 8 or 4
+    if tbl_is_in(prefs, 0x66) then op_sz_attr=2 end
+    code_point._op_sz_attr = op_sz_attr
+    
+    local addr_sz_attr = bitness//8
+    if tbl_is_in(prefs, 0x67) then addr_sz_attr=addr_sz_attr//2 end
+    code_point._addr_sz_attr = addr_sz_attr
+    
     local mod
     if modrm then
         mod = (modrm.disp == nil) and 'nomem' or 'mem'
     end
 
-    local rexw = (prefs.rex or 0)&8 ~= 0
-    local op_sz_attr = rexw and 8 or 4
-    if tbl_is_in(prefs, 0x66) then op_sz_attr=2 end
-    code_point._op_sz_attr = op_sz_attr
-
-    local addr_sz_attr = bitness//8
-    if tbl_is_in(prefs, 0x67) then addr_sz_attr=addr_sz_attr//2 end
-    code_point._addr_sz_attr = addr_sz_attr
     local syntaxes = {}
-    for i,s in ipairs(op.syns) do
+    for _,s in ipairs(op.syns) do
         if ((s.op_szs and tbl_is_in(s.op_szs, op_sz_attr)) or not s.op_szs) and (not s.mod or s.mod == mod) then
             syntaxes[#syntaxes+1] = s
         end
     end
     if #syntaxes==0 then
-        for i,s in ipairs(op.syns) do
+        for _,s in ipairs(op.syns) do
             if op_sz_attr==8 and s.op_szs and not tbl_is_in(s.op_szs, op_sz_attr) then
                 syntaxes[#syntaxes+1] = s
             end
