@@ -14,7 +14,7 @@ local asm_db = dofile 'D:\\_dev\\lua\\disasm\\asm.lua'
 local disfile = io.open('D:\\_dev\\lua\\disasm\\disasm.asm' , 'w')
 
 
-local function decodeSolo(bytes)
+local function decodeDirect(bytes)
     local b_i = 1
     local size = #bytes
     while b_i < size-16 do
@@ -22,11 +22,8 @@ local function decodeSolo(bytes)
         if cp then
             local cptext = cp:textify()
             if cp.debug then
-                disfile:write(cp.debug, ':  ')
-                local s_bytes = ''
-                for i=1,cp.size do
-                    s_bytes = s_bytes..('%02X'):format(bytes[i+b_i-1] or 0)..' '
-                end
+                -- disfile:write(cp.debug, ':  ')
+                local s_bytes = bytes2str(bytes, b_i, cp.size)
                 disfile:write(('%06X'):format(b_i-1), ' - ', s_bytes, ' - ', cptext, '\n')
             end
             b_i = b_i + cp.size
@@ -46,7 +43,7 @@ local function decodeString(str)
             return #t.s
         end
     })
-    return decodeSolo(bytes)
+    return decodeDirect(bytes)
 end
 
 local function decodeBytesViaMt(bytes)
@@ -58,12 +55,12 @@ local function decodeBytesViaMt(bytes)
             return #t.b
         end
     })
-    return decodeSolo(metabytes)
+    return decodeDirect(metabytes)
 end
 
 -- ProFi:start()
 local t1 = os.clock()
-local file = io.open('D:\\_dev\\lua\\disasm\\mcode.bin' , 'rb')
+local file = io.open('D:\\_dev\\lua\\disasm\\mcode64_fact.bin' , 'rb')
 local filedata_s = file:read('*all')
 file:close()
 print(os.clock()-t1)
@@ -91,7 +88,7 @@ assert(bytes_read==#filedata_s)
 t1 = os.clock()
 -- decodeString(filedata_s)
 for i=1,#filedata_arr do
-    xpcall( decodeSolo, function (err) print(err..'\n',debug.traceback()) end, filedata_arr[i])
+    xpcall( decodeDirect, function (err) print(err..'\n',debug.traceback()) end, filedata_arr[i])
     -- xpcall( decodeBytesViaMt, function (err) print(err..'\n',debug.traceback()) end, filedata_arr[i])
     if os.clock()-t1 > 30 then
         print('break', i)

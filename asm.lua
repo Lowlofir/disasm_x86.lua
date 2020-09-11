@@ -15,6 +15,21 @@ function table2str(t, lvl)
     return s..(' '):rep(lvl*4)..'},\n'
 end
 
+function bytes2str(bytes, i0, l)
+    i0=i0 or 1
+    l=l or #bytes-i0+1
+    local s_bytes = ''
+    for i=1,l do
+        local b = bytes[i+i0-1]
+        if not b then 
+            s_bytes = s_bytes..'EOF'
+            break
+        end
+        s_bytes = s_bytes..('%02X'):format(b)..' '
+    end
+    return s_bytes
+end
+
 function to_shex(n, splus)
     if n>=0 then 
         return (splus and '+%X' or '%X'):format(n)
@@ -115,7 +130,7 @@ local function prints(st, ...)
     st[#st+1] = table.concat(t, ' ')
 end
 
-local function opsEqualExceptPrefix(op1, op2)
+local function opsEqualExceptPrefix(op1, op2)  -- and bitness too
     if  op1.opcd_pri == op2.opcd_pri and
         op1.opcd_sz == op2.opcd_sz and
         op1.opcd_ext == op2.opcd_ext and
@@ -140,6 +155,20 @@ local function opsEqualExceptBitness(op1, op2)
     end
 end
 
+local function opsEqualExceptPseudoModRM(op1, op_wider)
+    if  op1.opcd_pri == op_wider.opcd_pri and
+        op1.opcd_sz == op_wider.opcd_sz and
+        op1.opcd_pref == op_wider.opcd_pref and
+        op1.opcd_ext and op_wider.opcd_sec and
+        op1.opcd_ext<<3 == op_wider.opcd_sec&(7<<3)
+    then
+        return true
+    else
+        return false
+    end
+end
+
+
 
 local function intermatch_nr(ops, bitness)
     local new_ops = {}
@@ -156,9 +185,25 @@ local function intermatch_nr(ops, bitness)
             break
         end
     end
+
+    for i=1,#ops do
+        local opw = ops[i]
+        if opw.opcd_sec then
+            new_ops = {}
+            for i=1,#ops do
+                local op2 = ops[i]
+                if not opsEqualExceptPseudoModRM(op2, opw) or opw.opcd_sec==op2.opcd_sec then
+                    new_ops[#new_ops+1] = op2
+                end
+            end
+            ops = new_ops
+            break
+        end
+    end
+
     if not bitness then return ops end
 
-    local bitp_my = 'only_'..tostring(bitness)
+    local bitp_my = bitness==32 and 'only_32' or 'only_64'
     local bitp_notmy = bitness==64 and 'only_32' or 'only_64'
 
     new_ops = {}
@@ -354,17 +399,12 @@ local function decodeOp(bytes, byte_i, bitness)
     return ops, byte_i, prefs
 end
 
-
 local function decodeOpInitial(bytes, byte_i, bitness)
     local byte_i_0 = byte_i
     local ops, byte_i, prefs = decodeOp(bytes, byte_i, bitness)
     if #ops==0 then return end
     if #ops~=1 then
-        local s=''
-        for i=0, 7 do
-            s=s..('%X'):format(bytes[byte_i_0+i])..' '
-        end
-        print(s)
+        print(bytes2str(bytes, byte_i_0, 8))
         print(table2str(ops))
         return
     end
@@ -737,7 +777,6 @@ local function decodeCodePoint(bytes, byte_i, bitness)
         end
     end
 
-    local rexw = (prefs.rex or 0)&8 ~= 0
 
     local code_point = setmetatable({}, code_point_mt)
     code_point.prefs = prefs
@@ -752,6 +791,8 @@ local function decodeCodePoint(bytes, byte_i, bitness)
     if modrm then
         mod = (modrm.disp == nil) and 'nomem' or 'mem'
     end
+
+    local rexw = (prefs.rex or 0)&8 ~= 0
     local op_sz_attr = rexw and 8 or 4
     if tbl_is_in(prefs, 0x66) then op_sz_attr=2 end
     code_point._op_sz_attr = op_sz_attr
@@ -774,11 +815,7 @@ local function decodeCodePoint(bytes, byte_i, bitness)
     end
     code_point.syns = syntaxes
     if #syntaxes==0 then
-        local s_bytes = ''
-        for i=1,code_point.size do
-            s_bytes = s_bytes..('%02X'):format(bytes[i+byte_i_0-1] or 0)..' '
-        end
-
+        local s_bytes = bytes2str(bytes, byte_i_0, code_point.size)
         error(s_bytes..'\n'..table2str(op))
     end
 
