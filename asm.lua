@@ -391,6 +391,18 @@ local function decodeOp(bytes, byte_i, bitness)
     end
     ops = new_ops
 
+    -- filter by free WAIT prefix
+    local new_ops = {}
+    for i=1,#ops do
+        local op = ops[i]
+        local bi = byte_i + op.opcd_sz
+        if not tbl_is_in(prefs, 0x9b) or op.opcd_pref==0x9b then
+            new_ops[#new_ops+1] = op
+        end
+    end
+    ops = new_ops
+
+
     ops = intermatch_nr(ops, bitness)
     -- assert(#ops<=1)
     if #ops==0 then 
@@ -585,45 +597,6 @@ local function textifyRegister(reg_i, reg_sz, rex, reg_group) -- reg_i from 0, r
 end
 
 
-function code_point_mt:textifyV0(syn_i)
-    local syn = self.syns[syn_i or 1]
-    local op = self.op
-    local opname = type(syn.mnem)=='table' and table.concat(syn.mnem, '/') or syn.mnem
-    local args = {}
-    if op.modrm then
-        local rm_reg
-        if type(self.modrm.rm)=='string' then 
-            rm_reg = self.modrm.rm
-        elseif self.modrm.rm then
-            rm_reg = textifyGenRegister(self.modrm.rm, self._op_sz_attr, self.prefs.rex)
-        end
-        if rm_reg and (self.modrm.disp or 0)>0 then
-            rm_reg = '['..rm_reg..(self._disp_value>0 and '+' or '')..tostring(self._disp_value)..']'
-        elseif rm_reg and self.modrm.disp==0 then
-            rm_reg = '['..rm_reg..']'
-        end
-
-        local reg_reg = textifyGenRegister(self.modrm.reg, self._op_sz_attr, self.prefs.rex)
-        
-
-        if op.bit_dir==0 then
-            args[#args+1] = rm_reg
-            args[#args+1] = reg_reg
-        elseif op.bit_dir==1 then
-            args[#args+1] = reg_reg
-            args[#args+1] = rm_reg
-        else
-            args[#args+1] = reg_reg
-        end
-    end
-    if self._imm_values then
-        for _,immv in ipairs(self._imm_values) do
-            args[#args+1] = to_shex(immv)
-        end
-    end
-    return opname..' '..table.concat(args, ',')
-end
-
 function code_point_mt:textifySib()
     local sib = self.modrm.sib
     local disp_v = self._disp_value
@@ -757,8 +730,14 @@ function code_point_mt:textify(syn)
     return opname..' '..table.concat(args, ',')
 end
 
+local code_point_args_mt = {}
+code_point_args_mt.__index = code_point_args_mt
+
+
+
 
 local function decodeCodePoint(bytes, byte_i, bitness)
+    assert(bitness == 64 or bitness == 32)
     local byte_i_0 = byte_i
     local byte_i_max = #bytes
     local op, modrm, prefs, byte_i, Z = decodeOpInitial(bytes, byte_i, bitness)

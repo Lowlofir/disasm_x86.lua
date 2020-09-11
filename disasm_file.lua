@@ -15,16 +15,20 @@ local function decodeDirect(bytes)
     local size = #bytes
     while b_i <= size do
 
-        local cp, err = asm_db.decodeCodePoint(bytes, b_i, 64)
+        local cp, err = asm_db.decodeCodePoint(bytes, b_i, 32)
         if cp then
             local cptext = cp:textify()
-            if cp.debug then
+            -- if cp.debug then
                 -- disfile:write(cp.debug, ':  ')
                 local s_bytes = bytes2str(bytes, b_i, cp.size)
                 disfile:write(('%06X'):format(b_i-1), ' - ', s_bytes, ' - ', cptext, '\n')
-            end
+            -- end
             b_i = b_i + cp.size
         else
+            if err=='no op match' then
+                local s_bytes = bytes2str(bytes, b_i, 8)
+                disfile:write(s_bytes, '\n')
+            end
             disfile:write('ERROR '..(err or 'no err')..'\n')
             b_i = b_i + 1
         end
@@ -57,8 +61,8 @@ end
 
 -- ProFi:start()
 local t1 = os.clock()
-local file = io.open('D:\\_dev\\lua\\disasm\\mcode64_fact.bin' , 'rb')
-local filedata_s = file:read('*all')
+local file = io.open('D:\\_dev\\lua\\disasm\\mcode32_1.bin' , 'rb')
+local filedata_s = file:read('*all'):sub(1,1000000)
 file:close()
 print(os.clock()-t1)
 
@@ -83,11 +87,10 @@ assert(bytes_read==#filedata_s)
 -- ProFi:start()
 -- profiler.start()
 t1 = os.clock()
--- decodeString(filedata_s)
+pcall( decodeString, filedata_s )
 for i=1,#filedata_arr do
     -- xpcall( decodeDirect, function (err) print(err..'\n',debug.traceback()) end, filedata_arr[i])
     -- xpcall( decodeBytesViaMt, function (err) print(err..'\n',debug.traceback()) end, filedata_arr[i])
-    xpcall( decodeString, function (err) print(err..'\n',debug.traceback()) end, filedata_s)
     if os.clock()-t1 > 30 then
         print('break', i)
         break

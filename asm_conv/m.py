@@ -246,8 +246,8 @@ def extract():
                 if modrm_req:
                     el['modrm'] = True
 
-            if el_is_prefix and el.opcd_pri==0x9B:  # drop WAIT prefix!
-                continue
+            # if el_is_prefix and el.opcd_pri==0x9B:  # drop WAIT prefix!
+            #     continue
 
             if el_is_prefix:
                 pri_opcd_prefs.append(el)
@@ -320,7 +320,7 @@ def process(els: List[wdict]):
         sels = sorted(els, key=kf)
         groups = []
         keys = []
-        for k, g in itertools.groupby(sels, key=kf):
+        for _, g in itertools.groupby(sels, key=kf):
             l = list(g)
             if len(l) <= 1: continue
             groups.append(l)
@@ -524,7 +524,7 @@ print(t2 - t1)
 # print(serialize([ None, 1, 2, None, False], False))
 t1 = time.perf_counter()
 # cProfile.run("ser = write({'opcodes': els, 'prefixes': prefixes}, 'asm_db.lua', form=True)", sort=SortKey.TIME)
-ser = write({'opcodes': els, 'prefixes': prefixes}, 'asm_db.lua', form=True)
+write({'opcodes': els, 'prefixes': prefixes}, 'asm_db.lua', form=True)
 t2 = time.perf_counter()
 print(t2 - t1)
 print(Path('asm_db.lua').stat().st_size/1024, 'KiB')
