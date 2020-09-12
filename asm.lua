@@ -560,8 +560,15 @@ local asm_regs_seg = { 'ES', 'CS', 'SS', 'DS', 'FS', 'GS' }
 local asm_regs_grps = { x87fpu='ST', mmx='MMX', xmm='XMM', ctrl='CR', debug='DR' }
 
 
-local code_point_mt = {}
-code_point_mt.__index = code_point_mt
+-- (gen|mmx|xmm|seg|x87fpu|ctrl|systabp|msr|debug|xcr)
+local asm_addr_reg = { C='ctrl', D='debug', G='gen', P='mmx', S='seg', V='xmm' } --  T='test'
+local asm_addr_rm = { E={'gen','mem'}, ES={'x87fpu','mem'}, EST={'x87fpu'}, H={'gen'}, M={'mem'}, N={'mmx'},
+                      Q={'mmx','mem'}, R={'gen'}, U={'xmm'}, W={'xmm','mem'} }
+
+local asm_addr_imm = { I=true, J=true, O=true }
+-- special: H, Z, O?
+
+
 
 local function textifyGenRegister(reg_i, reg_sz, rex) -- reg_i from 0, reg_sz from 1 to 8, rex is bool-tested
     if reg_i<8 then
@@ -596,6 +603,23 @@ local function textifyRegister(reg_i, reg_sz, rex, reg_group) -- reg_i from 0, r
     end
 end
 
+local code_point_mt = {}
+code_point_mt.__index = code_point_mt
+
+local function makeSibFunc(self)
+    local sib = self.modrm.sib
+    local disp_v = self._disp_value
+    -- assert(sib)
+
+    local b1
+    if sib.base then
+        b1 = textifyGenRegister(sib.base, self._addr_sz_attr, self.prefs.rex)
+    end
+    local b2 = textifyGenRegister(sib.index, self._addr_sz_attr, self.prefs.rex)
+    return function (regs)
+        return (b1 and regs[b1] or 0) + sib.s*(regs[b2] or 0) + (disp_v or 0)
+    end
+end
 
 function code_point_mt:textifySib()
     local sib = self.modrm.sib
@@ -619,15 +643,8 @@ function code_point_mt:textifySib()
     return '['..(b1 or '')..(b2 or '')..(b3 or '')..']'
 end
 
--- (gen|mmx|xmm|seg|x87fpu|ctrl|systabp|msr|debug|xcr)
-local asm_addr_reg = { C='ctrl', D='debug', G='gen', P='mmx', S='seg', V='xmm' } --  T='test'
-local asm_addr_rm = { E={'gen','mem'}, ES={'x87fpu','mem'}, EST={'x87fpu'}, H={'gen'}, M={'mem'}, N={'mmx'},
-                      Q={'mmx','mem'}, R={'gen'}, U={'xmm'}, W={'xmm','mem'} }
 
-local asm_addr_imm = { I=true, J=true, O=true }
--- special: H, Z, O?
-
-function code_point_mt:textify(syn)
+function code_point_mt:textify_full_reference(syn)
     local syn = syn or self.syns[1]
     local op = self.op
     local opname = type(syn.mnem)=='table' and table.concat(syn.mnem, '/') or syn.mnem
@@ -730,8 +747,195 @@ function code_point_mt:textify(syn)
     return opname..' '..table.concat(args, ',')
 end
 
-local code_point_args_mt = {}
-code_point_args_mt.__index = code_point_args_mt
+local cp_arg_mt = {}
+cp_arg_mt.__index = cp_arg_mt
+
+function cp_arg_mt:textify()
+    if self.reg then
+        return textifyRegister(self.reg, self.vsize, self._cp.prefs.rex, self.reg_group)
+    elseif self.ref then
+        local a
+        if not self.sib then  -- no SIB
+            if self.ref_base==nil then
+                a = ('[%s]'):format(to_shex(self.ref_disp))
+            else            
+                local disp_str = self.ref_disp and to_shex(self.ref_disp, true) or ''
+                if type(self.ref_base)=='string' then
+                    a = ('[%s%s]'):format(self.ref_base, disp_str)
+                else
+                    local rs = textifyGenRegister(self.ref_base, self.ref_sz)
+                    a = ('[%s%s]'):format(rs, disp_str)
+                end
+            end
+        else  -- SIB
+            a = self._cp:textifySib()
+        end
+        return a
+    elseif self.value then
+        return type(self.value)=='string' and self.value or to_shex(self.value)
+    else
+        return 'textify err'
+    end
+end
+
+function code_point_mt:_construct_args(syn)
+    assert(syn)
+    local op = self.op
+    local args_tbl = {}
+    
+    local imm_i = 1
+    for _, p in ipairs(syn.params) do
+        if p.hidden then goto continue end
+        local arg = { _cp = self }
+
+
+        local op_sz = type(p.vtype)=='table' and (p.vtype[self._op_sz_attr] or p.vtype[4]) or p.vtype
+        arg.vsize = op_sz
+        if type(op_sz)=='table' then
+            print(op.opcd_pri, op.opcd_sz, op_sz and table2str(op_sz) or 'nil')
+        end
+
+
+        if not p.address then
+            assert(p.value)
+            if p.nr then
+                arg.reg = tonumber(p.nr)
+                arg.reg_group = p.group
+            else
+                arg.value = p.value
+            end
+            goto value_set
+        end
+
+        if p.address=='Z' then
+            local reg = self._Z + (((self.prefs.rex or 0)&1)<<3)   -- REX.B
+            
+            arg.reg = tonumber(reg)
+            arg.reg_group = 'gen'
+
+            goto value_set
+        end
+
+        do
+            local reg_lp = asm_addr_reg[p.address]
+            if reg_lp then
+                assert(self.modrm)
+                arg.reg, arg.reg_group = self.modrm.reg, reg_lp
+                args_tbl.reg = arg
+                goto value_set
+            end
+
+            local rm_lp = asm_addr_rm[p.address]
+            if rm_lp then
+                assert(self.modrm)
+                if (self.modrm.disp and not tbl_is_in(rm_lp, 'mem')) or (not self.modrm.disp and p.address=='M') then
+                    -- return error('INVALID SYNTAX'..table2str{self.modrm.disp, p.address, syn.mnem})
+                    return nil, 'INVALID SYNTAX'
+                end
+                if self.modrm.disp then  -- mod != 11
+                    arg.ref = true
+                    arg.ref_sz = self._addr_sz_attr
+                    if not self.modrm.sib then  -- no SIB
+                        local disp_val = self._disp_value or 0
+                        arg.ref_disp = self._disp_value
+                        if self.modrm.rm=='0' then
+                            arg.expr = disp_val
+                        elseif type(self.modrm.rm)=='string' then
+                            arg.ref_base = self.modrm.rm
+                            arg.expr = function (regs) 
+                                return disp_val + regs[self.modrm.rm]
+                            end
+                        else
+                            arg.ref_base = self.modrm.rm
+                            local rs = textifyRegister(self.modrm.rm, self._addr_sz_attr, self.prefs.rex, 'gen')
+                            arg.expr = function (regs) 
+                                return disp_val + regs[rs]
+                            end
+                        end
+                    else  -- SIB
+                        arg.sib = true
+                        local sib = self.modrm.sib
+                        arg.ref_base = sib.base
+                        arg.ref_index = sib.index
+                        arg.ref_scale = sib.s                    
+                        arg.expr = makeSibFunc(self)
+                    end
+                    args_tbl.rm = arg
+                    goto value_set
+                else                   -- mod == 11
+                    arg.reg = self.modrm.rm
+                    arg.reg_group = rm_lp[1]~='mem' and rm_lp[1] or 'gen'
+                    args_tbl.rm = arg
+                    goto value_set
+                end
+            end
+        end
+        if asm_addr_imm[p.address] then
+            if p.value then 
+                arg.value = tonumber(p.value)
+                goto value_set 
+            end
+            local val = self._imm_values[imm_i]
+            imm_i=imm_i+1
+            if p.address=='I' then
+                arg.value = val
+            elseif p.address=='J' then
+                arg.value = val
+            elseif p.address=='O' then
+                assert(not self.modrm)
+                arg.ref = true
+                arg.ref_disp = val
+                arg.expr = val
+            end
+            goto value_set
+        end
+
+        if p.nr then
+            arg.reg = tonumber(p.nr)
+            arg.reg_group = p.group
+            goto value_set
+        elseif p.value then
+            arg.value = p.value
+            goto value_set
+        end
+        print('############', p.address)
+        -- arg.? = '#ERR '..p.address
+        aelf.debug = '#ERR ARG '..p.address
+
+        ::value_set::
+        setmetatable(arg, cp_arg_mt)
+        args_tbl[#args_tbl+1] = arg
+        ::continue::
+    end
+    return args_tbl
+end
+
+function code_point_mt:get_args(syn)
+    syn=syn or self.syns[1]
+    self._args = self._args or {}
+    if self._args[syn] then return self._args[syn] end
+    local args, err = self:_construct_args(syn)
+    self._args[syn] = args
+    return args, err
+end
+
+function code_point_mt:textify(syn)
+    local syn = syn or self.syns[1]
+    local args, err = self:get_args(syn)
+    local opname = type(syn.mnem)=='table' and table.concat(syn.mnem, '/') or syn.mnem
+    assert(type(opname)=='string')
+    if not args then
+        return opname..': '..err
+    end
+
+    local args_strs = {}
+    for _,arg in ipairs(args) do
+        local rs = arg:textify()
+        table.insert(args_strs, rs) 
+    end
+
+    return opname..' '..table.concat(args_strs, ',')
+end
 
 
 
@@ -795,7 +999,7 @@ local function decodeCodePoint(bytes, byte_i, bitness)
     end
     if #syntaxes==0 then
         for _,s in ipairs(op.syns) do
-            if op_sz_attr==8 and s.op_szs and not tbl_is_in(s.op_szs, op_sz_attr) then
+            if op_sz_attr==8 and s.op_szs and not tbl_is_in(s.op_szs, op_sz_attr) and (not s.mod or s.mod == mod) then
                 syntaxes[#syntaxes+1] = s
             end
         end
