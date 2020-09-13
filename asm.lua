@@ -423,7 +423,7 @@ local function decodeOpInitial(bytes, byte_i, bitness)
 
     -- assert(#ops==1)
     local op = ops[1]
-    byte_i = byte_i + op.opcd_sz
+    byte_i = byte_i + op.opcd_sz + (op.opcd_sec and 1 or 0)
     assert(bytes[byte_i-1], #bytes..' '..byte_i)
     local Z = bytes[byte_i-1] & 7
     local modrm

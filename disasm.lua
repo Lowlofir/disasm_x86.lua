@@ -28,7 +28,7 @@ local function disasm_region(addr0, size, file)
         -- file:write(dis, '\n')
 
         local bytestbl_alt = readBytes(addr, 16, true)
-        local cp = asm_db.decodeCodePoint(readBytes(addr, 16, true), 1, targetIs64Bit() and 64 or 32)
+        local cp = asm_db.decodeCodePoint(bytestbl_alt, 1, targetIs64Bit() and 64 or 32)
         if cp then
             -- cp:get_args()
             if cp.size~=#bytestbl or #cp.syns>1 then
