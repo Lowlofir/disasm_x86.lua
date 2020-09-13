@@ -22,7 +22,7 @@ local function decodeDirect(bytes)
                 -- disfile:write(cp.debug, ':  ')
                 local s_bytes = bytes2str(bytes, b_i, cp.size)
                 -- disfile:write(('%06X'):format(b_i-1), ' - ', s_bytes, ' - ', cp:textify_full_reference(), '\n')
-                disfile:write(('%06X'):format(b_i-1), ' - ', s_bytes, ' - ', cp:textify(), '\n')
+                -- disfile:write(('%06X'):format(b_i-1), ' - ', s_bytes, ' - ', cp:textify(), '\n')
                 -- cp:get_args()
                 -- end
             b_i = b_i + cp.size
@@ -38,12 +38,12 @@ local function decodeDirect(bytes)
 end
 
 local function decodeString(str)
-    local bytes = setmetatable({ s = str }, {
+    local bytes = setmetatable({}, {
         __index = function (t, i)
-            return t.s:byte(i)
+            return str:byte(i)
         end,
         __len = function (t)
-            return #t.s
+            return #str
         end
     })
     return decodeDirect(bytes)
@@ -64,7 +64,7 @@ end
 -- ProFi:start()
 local t1 = os.clock()
 local file = io.open('D:\\_dev\\lua\\disasm\\mcode64_fact.bin' , 'rb')
-local filedata_s = file:read('*all'):sub(1,10000000)
+local filedata_s = file:read('*all'):sub(1,5000000)
 file:close()
 print(os.clock()-t1)
 
