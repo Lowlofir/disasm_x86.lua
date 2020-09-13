@@ -46,7 +46,7 @@ class wdict(dict):
         return self.get(k)
 
 
-tree = etree.parse(open('x86reference.xml'))
+tree = etree.parse('asm_conv/x86reference.xml')
 
 ddd = set()
 
@@ -477,23 +477,23 @@ def process(els: List[wdict]):
         syn['op_szs'] = list(op_szs) if len(op_szs)>0 else None
 
 
-    for el in els:
-        grouped_syns = defaultdict(list)
-        for syn in el.syns:
-            grouped_syns[syn.mod].append(syn)
-        for gr in grouped_syns.values():
-            synvtypes = []
-            for s in gr:
-                parvtypes = []
-                for p in s.params:
-                    if p.get('vtype') in vtypes_tbl:
-                        parvtypes.append(vtypes_tbl[p['vtype']])
-                if len(parvtypes)>1 and not all(pvt==parvtypes[0] for pvt in parvtypes[1:]):
-                    print('parvtypes anomaly:',el.btuple[0], el.btuple[3])
-                    parvtypes[0].update(*parvtypes[1:])
-                synvtypes.append(parvtypes[0] if parvtypes else None)
-            # if any(synvt==None for synvt in synvtypes) and not all(synvt==None for synvt in synvtypes):
-            #     print('synvtypes anomaly:',el.btuple[0], el.btuple[3])
+    # for el in els:
+    #     grouped_syns = defaultdict(list)
+    #     for syn in el.syns:
+    #         grouped_syns[syn.mod].append(syn)
+    #     for gr in grouped_syns.values():
+    #         synvtypes = []
+    #         for s in gr:
+    #             parvtypes = []
+    #             for p in s.params:
+    #                 if p.get('vtype') in vtypes_tbl:
+    #                     parvtypes.append(vtypes_tbl[p['vtype']])
+    #             if len(parvtypes)>1 and not all(pvt==parvtypes[0] for pvt in parvtypes[1:]):
+    #                 # print('parvtypes anomaly:',el.btuple[0], el.btuple[3])
+    #                 parvtypes[0].update(*parvtypes[1:])
+    #             synvtypes.append(parvtypes[0] if parvtypes else None)
+    #         # if any(synvt==None for synvt in synvtypes) and not all(synvt==None for synvt in synvtypes):
+    #         #     print('synvtypes anomaly:',el.btuple[0], el.btuple[3])
 
     for el in els:
         for syn in el.syns:
@@ -516,15 +516,13 @@ els, prefixes = extract()
 els = process(els)
 t2 = time.perf_counter()
 
-# pprint(els, width=120, indent=4)
 print(sorted(ddd))
 print(t2 - t1)
 
-# print(serialize({ 'a':None, 'b':1, 'c':2, 'd':None, 'e':False}, False))
-# print(serialize([ None, 1, 2, None, False], False))
+outfilepath = 'disasm_x86_db.lua'
+
 t1 = time.perf_counter()
-# cProfile.run("ser = write({'opcodes': els, 'prefixes': prefixes}, 'asm_db.lua', form=True)", sort=SortKey.TIME)
-write({'opcodes': els, 'prefixes': prefixes}, 'asm_db.lua', form=True)
+write({'opcodes': els, 'prefixes': prefixes}, outfilepath, form=True)
 t2 = time.perf_counter()
 print(t2 - t1)
-print(Path('asm_db.lua').stat().st_size/1024, 'KiB')
+print(Path(outfilepath).stat().st_size/1024, 'KiB')

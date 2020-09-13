@@ -57,6 +57,7 @@ local function scan_thr(thr)
     for i=20,up do
         if os.clock()-t0 >= 1 then 
             print('.')
+            file:flush()
             t0 = os.clock()
         end
         local len = 0x400
