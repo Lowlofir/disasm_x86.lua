@@ -117,7 +117,7 @@ def extract():
                     el['only_64'] = True
             note = el_node.find('note/brief')
             if note is not None:
-                el['desc'] = note.text + ''.join(etree.tostring(e, encoding='unicode') for e in note)
+                el['desc'] = note.text + ' '.join(e.text+' '+e.tail for e in note)
 
             el['opcd_pri'] = pri_opcd
             el['opcd_sz'] = pri_sz
