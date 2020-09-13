@@ -27,19 +27,18 @@ local function disasm_region(addr0, size, file)
         local bytestbl, opcode = disdata.bytes, disdata.opcode
         -- file:write(dis, '\n')
 
+        local bytestbl_alt = readBytes(addr, 16, true)
         local cp = asm_db.decodeCodePoint(readBytes(addr, 16, true), 1, targetIs64Bit() and 64 or 32)
         if cp then
-            local cptext = cp:textify()
-            if cp.debug then
+            -- cp:get_args()
+            if cp.size~=#bytestbl or #cp.syns>1 then
                 file:write(dis, '\n')
-                file:write(cp.debug, ':  ')
-                if cp.size~=#bytestbl then file:write('SZ ERROR\n') end
-                local s_bytes = ''
-                for i=1,cp.size do
-                    s_bytes = s_bytes..('%02X'):format(bytestbl[i] or 0)..' '
+                for _, s in ipairs(cp.syns) do
+                    local cptext = cp:textify(s)
+                    if cp.size~=#bytestbl then file:write('SZ ERROR ', cp.size, ' ', #bytestbl ,'\n') end
+                    local s_bytes = bytes2str(bytestbl_alt, 1, cp.size)
+                    file:write(s_bytes, ' - ', cptext, '\n')
                 end
-                local dispstr = cp._disp_value and ('%X'):format(cp._disp_value) or ''
-                file:write(s_bytes, ' - ', cptext, '\n')
             end
         else
             file:write(dis, '\n')
@@ -52,7 +51,7 @@ local function disasm_region(addr0, size, file)
 end
 
 local function scan_thr(thr)
-    local maxi = 1000
+    local maxi = 5000
     local up = maxi<#funcs-1 and maxi or #funcs-1
     local t0 = os.clock()
     for i=20,up do
@@ -60,7 +59,7 @@ local function scan_thr(thr)
             print('.')
             t0 = os.clock()
         end
-        local len = 0x100
+        local len = 0x400
         local size = (funcs[i+1]-funcs[i])>len and len or funcs[i+1]-funcs[i]
         local r = xpcall( disasm_region, function (err) print(err,debug.traceback()) end, funcs[i], size, file)
         if not r then
@@ -74,22 +73,8 @@ end
 
 local thr = createThread(scan_thr)
 
--- local reg = readBytes(funcs[1000], 0x40000, true)
-
--- local function decodeSolo(bytes)
---     local b_i = 1
---     local size = #reg
---     while b_i < size do
---         local dec, modrm, dec_sz = asm_db.decodeFullOp(bytes, b_i, 64)
---         if dec then
---             file:write(('%X'):format(b_i+addr-1), ' - ', dec.syns[1].mnem, '\n')
---             b_i = b_i + dec_sz
---         else
---             file:write('ERROR\n')
---             b_i = b_i + 1
---         end
---     end
--- end
+-- disasm_region(0x7FF7C6E5687D, 0x400, file)
+-- file:close()
 
 -- assert(reg)
 -- ProFi = dofile 'D:\\_dev\\lua\\disasm\\ProFi.lua'

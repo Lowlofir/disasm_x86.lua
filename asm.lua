@@ -395,7 +395,6 @@ local function decodeOp(bytes, byte_i, bitness)
     local new_ops = {}
     for i=1,#ops do
         local op = ops[i]
-        local bi = byte_i + op.opcd_sz
         if not tbl_is_in(prefs, 0x9b) or op.opcd_pref==0x9b then
             new_ops[#new_ops+1] = op
         end
@@ -979,7 +978,7 @@ local function decodeCodePoint(bytes, byte_i, bitness)
 
     local rexw = (prefs.rex or 0)&8 ~= 0
     local op_sz_attr = rexw and 8 or 4
-    if tbl_is_in(prefs, 0x66) then op_sz_attr=2 end
+    if tbl_is_in(prefs, 0x66) and op.opcd_pref~=0x66 then op_sz_attr=2 end
     code_point._op_sz_attr = op_sz_attr
     
     local addr_sz_attr = bitness//8
@@ -992,18 +991,33 @@ local function decodeCodePoint(bytes, byte_i, bitness)
     end
 
     local syntaxes = {}
+    local op_szs_flag
     for _,s in ipairs(op.syns) do
         if ((s.op_szs and tbl_is_in(s.op_szs, op_sz_attr)) or not s.op_szs) and (not s.mod or s.mod == mod) then
+            if s.op_szs then
+                op_szs_flag = true
+                break
+            end
             syntaxes[#syntaxes+1] = s
         end
     end
+    if op_szs_flag then
+        syntaxes = {}
+        for _,s in ipairs(op.syns) do
+            if (s.op_szs and tbl_is_in(s.op_szs, op_sz_attr)) and (not s.mod or s.mod == mod) then
+                syntaxes[#syntaxes+1] = s
+            end
+        end    
+    end
     if #syntaxes==0 then
         for _,s in ipairs(op.syns) do
-            if op_sz_attr==8 and s.op_szs and not tbl_is_in(s.op_szs, op_sz_attr) and (not s.mod or s.mod == mod) then
+            if op_sz_attr==8 and s.op_szs and tbl_is_in(s.op_szs, 4) and (not s.mod or s.mod == mod) then
                 syntaxes[#syntaxes+1] = s
             end
         end
     end
+    
+
     code_point.syns = syntaxes
     if #syntaxes==0 then
         local s_bytes = bytes2str(bytes, byte_i_0, code_point.size)
