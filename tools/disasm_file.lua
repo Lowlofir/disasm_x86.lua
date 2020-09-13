@@ -1,6 +1,6 @@
 -- require("luacov")
 
-local ProFi = dofile 'tools/ProFi.lua'
+-- local ProFi = dofile 'tools/ProFi.lua'
 
 -- t1 = os.clock()
 local asm = dofile 'disasm_x86.lua'

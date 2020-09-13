@@ -1,9 +1,7 @@
 -- require("luacov.tick")
 -- local opaddr, bytestr, opcode = dis:match('^(%S+) %- ([%x ]+) %- (.+)$')
 
--- t1 = os.clock()
-local asm_db = dofile 'D:\\_dev\\lua\\disasm\\disasm_x86.lua'
--- print(os.clock()-t1)
+local asm_db = require 'disasm_x86'
 
 local diss = getDissectCode()
 local funcs = diss.getReferencedFunctions()
@@ -51,7 +49,7 @@ local function disasm_region(addr0, size, file)
 end
 
 local function scan_thr(thr)
-    local maxi = 5000
+    local maxi = 1000
     local up = maxi<#funcs-1 and maxi or #funcs-1
     local t0 = os.clock()
     for i=20,up do

@@ -38,7 +38,7 @@ function to_shex(n, splus)
     end
 end
 
-local asm_db = dofile 'disasm_x86_db.lua'
+local asm_db = require 'disasm_x86_db'
 
 
 local asm_pref_map = {}
