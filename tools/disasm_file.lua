@@ -1,13 +1,12 @@
 -- require("luacov")
 
--- local ProFi = dofile 'D:\\_dev\\lua\\disasm\\ProFi.lua'
--- local profiler = require("profiler")
+local ProFi = dofile 'tools/ProFi.lua'
 
 -- t1 = os.clock()
-local asm_db = dofile 'D:\\_dev\\lua\\disasm\\asm.lua'
+local asm = dofile 'disasm_x86.lua'
 -- print(os.clock()-t1)
 
-local disfile = io.open('D:\\_dev\\lua\\disasm\\disasm.asm' , 'w')
+local disfile = io.open('disasm.asm' , 'w')
 
 
 local function decodeDirect(bytes)
@@ -15,7 +14,7 @@ local function decodeDirect(bytes)
     local size = #bytes
     while b_i <= size do
 
-        local cp, err = asm_db.decodeCodePoint(bytes, b_i, 64)
+        local cp, err = asm.decodeCodePoint(bytes, b_i, 64)
         if cp then
             -- local cptext = cp:textify()
             -- if cp.debug then
@@ -63,7 +62,7 @@ end
 
 -- ProFi:start()
 local t1 = os.clock()
-local file = io.open('D:\\_dev\\lua\\disasm\\mcode64_fact.bin' , 'rb')
+local file = io.open('tools/mcode64_fact.bin' , 'rb')
 local filedata_s = file:read('*all'):sub(1,5000000)
 file:close()
 print(os.clock()-t1)
@@ -87,20 +86,17 @@ assert(bytes_read==#filedata_s)
 
 
 -- ProFi:start()
--- profiler.start()
 t1 = os.clock()
 xpcall( decodeString, function (err) print(err..'\n',debug.traceback()) end, filedata_s)
 for i=1,#filedata_arr do
     -- xpcall( decodeDirect, function (err) print(err..'\n',debug.traceback()) end, filedata_arr[i])
     -- xpcall( decodeBytesViaMt, function (err) print(err..'\n',debug.traceback()) end, filedata_arr[i])
-    if os.clock()-t1 > 30 then
+    if os.clock()-t1 > 20 then
         print('break', i)
         break
     end
 end
 -- ProFi:stop()
--- profiler.stop()
 print(os.clock()-t1)
--- ProFi:writeReport( 'D:\\_dev\\lua\\disasm\\MyProfilingReport.txt' )
--- profiler.report("profiler.log")
+-- ProFi:writeReport( 'ProfilingReport.txt' )
 disfile:close()

@@ -2,7 +2,7 @@
 -- local opaddr, bytestr, opcode = dis:match('^(%S+) %- ([%x ]+) %- (.+)$')
 
 -- t1 = os.clock()
-local asm_db = dofile 'D:\\_dev\\lua\\disasm\\asm.lua'
+local asm_db = dofile 'D:\\_dev\\lua\\disasm\\disasm_x86.lua'
 -- print(os.clock()-t1)
 
 local diss = getDissectCode()
