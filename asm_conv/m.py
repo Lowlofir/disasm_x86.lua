@@ -46,7 +46,7 @@ class wdict(dict):
         return self.get(k)
 
 
-tree = etree.parse('asm_conv/x86reference.xml')
+tree = etree.parse('asm_conv/x86reference/x86reference.xml')
 
 ddd = set()
 
