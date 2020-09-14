@@ -602,6 +602,7 @@ local function textifyRegister(reg_i, reg_sz, rex, reg_group) -- reg_i from 0, r
     end
 end
 
+---@class CodePoint
 local code_point_mt = {}
 code_point_mt.__index = code_point_mt
 
@@ -746,30 +747,50 @@ function code_point_mt:textify_full_reference(syn)
     return opname..' '..table.concat(args, ',')
 end
 
-local cp_arg_mt = {}
-cp_arg_mt.__index = cp_arg_mt
+---@class CodePoint_Arg
+local cp_arg = {}
+function cp_arg:eval_ref(regs)
+    assert(self.ref)
 
-function cp_arg_mt:textify()
+    local b1 = 0
+    if self.ref_base then
+        local s = textifyGenRegister(self.ref_base, self.ref_sz, self.rex)
+        b1 = regs[s]
+        if not b1 then return nil, s..' not available' end
+    end
+    local b2 = 0
+    if (self.ref_scale or 0)~=0 then
+        local s = textifyGenRegister(self.ref_index, self.ref_sz, self.rex)
+        b2 = regs[s]
+        if not b2 then return nil, s..' not available' end
+        b2 = b2  * self.ref_scale
+    end
+    return b1+b2+(self.ref_disp or 0)
+end
+
+local cp_arg_mt = {}
+cp_arg_mt.__index = cp_arg
+
+---@return string
+function cp_arg:textify()
     if self.reg then
-        return textifyRegister(self.reg, self.vsize, self._cp.prefs.rex, self.reg_group)
+        return textifyRegister(self.reg, self.vsize, self.rex, self.reg_group)
     elseif self.ref then
-        local a
-        if not self.sib then  -- no SIB
-            if self.ref_base==nil then
-                a = ('[%s]'):format(to_shex(self.ref_disp))
-            else            
-                local disp_str = self.ref_disp and to_shex(self.ref_disp, true) or ''
-                if type(self.ref_base)=='string' then
-                    a = ('[%s%s]'):format(self.ref_base, disp_str)
-                else
-                    local rs = textifyGenRegister(self.ref_base, self.ref_sz)
-                    a = ('[%s%s]'):format(rs, disp_str)
-                end
-            end
-        else  -- SIB
-            a = self._cp:textifySib()
+        local b1
+        if self.ref_base then
+            b1 = type(self.ref_base)=='number' and textifyGenRegister(self.ref_base, self.ref_sz, self.rex) or self.ref_base
         end
-        return a
+        local b2
+        if (self.ref_scale or 0)~=0 then
+            b2 = (b1 and '+' or '')..textifyGenRegister(self.ref_index, self.ref_sz, self.rex)
+            if self.ref_scale>1 then b2=b2..'*'..tostring(self.ref_scale) end
+        end
+        local b3
+        if self.ref_disp then
+            b3 = to_shex(self.ref_disp, b1 or b2)
+        end
+        -- self.debug= 'sib'
+        return '['..(b1 or '')..(b2 or '')..(b3 or '')..']'        
     elseif self.value then
         return type(self.value)=='string' and self.value or to_shex(self.value)
     else
@@ -785,7 +806,8 @@ function code_point_mt:_construct_args(syn)
     local imm_i = 1
     for _, p in ipairs(syn.params) do
         if p.hidden then goto continue end
-        local arg = { _cp = self }
+        ---@type CodePoint_Arg
+        local arg = { rex = self.prefs.rex }
 
 
         local op_sz = type(p.vtype)=='table' and (p.vtype[self._op_sz_attr] or p.vtype[4]) or p.vtype
@@ -834,22 +856,14 @@ function code_point_mt:_construct_args(syn)
                 if self.modrm.disp then  -- mod != 11
                     arg.ref = true
                     arg.ref_sz = self._addr_sz_attr
+                    arg.ref_disp = self._disp_value
                     if not self.modrm.sib then  -- no SIB
                         local disp_val = self._disp_value or 0
-                        arg.ref_disp = self._disp_value
                         if self.modrm.rm=='0' then
-                            arg.expr = disp_val
                         elseif type(self.modrm.rm)=='string' then
                             arg.ref_base = self.modrm.rm
-                            arg.expr = function (regs) 
-                                return disp_val + regs[self.modrm.rm]
-                            end
                         else
                             arg.ref_base = self.modrm.rm
-                            local rs = textifyRegister(self.modrm.rm, self._addr_sz_attr, self.prefs.rex, 'gen')
-                            arg.expr = function (regs) 
-                                return disp_val + regs[rs]
-                            end
                         end
                     else  -- SIB
                         arg.sib = true
@@ -857,7 +871,6 @@ function code_point_mt:_construct_args(syn)
                         arg.ref_base = sib.base
                         arg.ref_index = sib.index
                         arg.ref_scale = sib.s                    
-                        arg.expr = makeSibFunc(self)
                     end
                     args_tbl.rm = arg
                     goto value_set
@@ -899,7 +912,7 @@ function code_point_mt:_construct_args(syn)
         end
         print('############', p.address)
         -- arg.? = '#ERR '..p.address
-        aelf.debug = '#ERR ARG '..p.address
+        self.debug = '#ERR ARG '..p.address
 
         ::value_set::
         setmetatable(arg, cp_arg_mt)
@@ -918,6 +931,7 @@ function code_point_mt:get_args(syn)
     return args, err
 end
 
+---@return string
 function code_point_mt:textify(syn)
     local syn = syn or self.syns[1]
     local args, err = self:get_args(syn)
@@ -938,7 +952,7 @@ end
 
 
 
-
+---@return CodePoint, string|nil
 local function decodeCodePoint(bytes, byte_i, bitness)
     assert(bitness == 64 or bitness == 32)
     local byte_i_0 = byte_i
