@@ -553,7 +553,7 @@ local function calcImmSize(imm, bytes, byte_i, prefs, bitness)
 end
 
 local asm_regs = { 'ax', 'cx', 'dx', 'bx', 'sp', 'bp', 'si', 'di' }
-local asm_regs2 = { 'a', 'c', 'd', 'b', 'sp', 'bp', 'si', 'di' }
+local asm_regs2 = { 'a', 'c',  'd',  'b',  'sp', 'bp', 'si', 'di' }
 
 local asm_regs_seg = { 'ES', 'CS', 'SS', 'DS', 'FS', 'GS' }
 local asm_regs_grps = { x87fpu='ST', mmx='MMX', xmm='XMM', ctrl='CR', debug='DR' }
@@ -570,6 +570,7 @@ local asm_addr_imm = { I=true, J=true, O=true }
 
 
 local function textifyGenRegister(reg_i, reg_sz, rex) -- reg_i from 0, reg_sz from 1 to 8, rex is bool-tested
+    if reg_i=='rip' or reg_i=='eip' then return reg_i end
     if reg_i<8 then
         if reg_sz>=2 then
             local prefix = reg_sz<4 and '' or (reg_sz==4 and 'e' or 'r')
@@ -587,6 +588,7 @@ local function textifyGenRegister(reg_i, reg_sz, rex) -- reg_i from 0, reg_sz fr
         return 'r'..tostring(reg_i)..pfix
     end
 end
+module.textifyGenRegister = textifyGenRegister
 
 local function textifyRegister(reg_i, reg_sz, rex, reg_group) -- reg_i from 0, reg_sz from 1 to 8, rex is bool-tested
     assert(reg_i)
@@ -601,6 +603,8 @@ local function textifyRegister(reg_i, reg_sz, rex, reg_group) -- reg_i from 0, r
         print('textifyRegister2 out of groups on ', tostring(reg_i), tostring(reg_sz), tostring(rex), tostring(reg_group))
     end
 end
+module.textifyRegister = textifyRegister
+
 
 ---@class CodePoint
 local code_point_mt = {}
@@ -807,7 +811,7 @@ function code_point_mt:_construct_args(syn)
     for _, p in ipairs(syn.params) do
         if p.hidden then goto continue end
         ---@type CodePoint_Arg
-        local arg = { rex = self.prefs.rex }
+        local arg = { rex = self.prefs.rex, dir = p.dir }
 
 
         local op_sz = type(p.vtype)=='table' and (p.vtype[self._op_sz_attr] or p.vtype[4]) or p.vtype
@@ -954,7 +958,7 @@ end
 
 ---@return CodePoint, string|nil
 local function decodeCodePoint(bytes, byte_i, bitness)
-    assert(bitness == 64 or bitness == 32)
+    assert(bitness == 64 or bitness == 32, 'Wrong bitness argument')
     local byte_i_0 = byte_i
     local byte_i_max = #bytes
     local op, modrm, prefs, byte_i, Z = decodeOpInitial(bytes, byte_i, bitness)
