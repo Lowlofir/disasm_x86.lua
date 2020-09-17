@@ -659,7 +659,7 @@ function code_point_mt:textify_full_reference(syn)
     for _, p in ipairs(syn.params) do
         if p.hidden then goto continue end
 
-        local op_sz = type(p.vtype)=='table' and (p.vtype[self._op_sz_attr] or p.vtype[4]) or p.vtype --or self._op_sz_attr
+        local op_sz = type(p.vsize)=='table' and (p.vsize[self._op_sz_attr] or p.vsize[4]) or p.vsize --or self._op_sz_attr
         if type(op_sz)=='table' then
             print(op.opcd_pri, op.opcd_sz, op_sz and table2str(op_sz) or 'nil')
         end
@@ -814,9 +814,11 @@ function code_point_mt:_construct_args(syn)
         local arg = { rex = self.prefs.rex, dir = p.dir }
 
 
-        local op_sz = type(p.vtype)=='table' and (p.vtype[self._op_sz_attr] or p.vtype[4]) or p.vtype
+        local op_sz = type(p.vsize)=='table' and (p.vsize[self._op_sz_attr] or p.vsize[4]) or p.vsize
         arg.vsize = op_sz
+        arg.vtype = p.vtype
         if type(op_sz)=='table' then
+            error("type(op_sz)=='table'")
             print(op.opcd_pri, op.opcd_sz, op_sz and table2str(op_sz) or 'nil')
         end
 
