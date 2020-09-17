@@ -1,16 +1,15 @@
 import codecs
 import itertools
 from operator import attrgetter, itemgetter
-import struct
 import time
 import cProfile
 from collections import defaultdict
 from pathlib import Path
 # from pstats import SortKey
-from typing import *
+from typing import List, Mapping, Optional, Union
 
 from lxml import etree
-from export import *
+from export import write
 from pprint import pprint
 # from dotmap import DotMap
 
@@ -448,8 +447,8 @@ def process(els: List[wdict]):
     vtypes_tbl = { 'wo': {2}, 'do': {4}, 'qp': {8}, 'v': {2,4}, 'vds':{2,4,8}, 'vq':{4,2}, 'vqp':{2,4,8}, 'vs':{2,4},
                    'dqp':{4,8}, 'p':{2,4}, 'ptp':{2,4,8} }
 
-    def code_vtype(vtype) -> Optional[Union[dict, int]]:
-        vtt0 = { 'b':1, 'bs':1, 'bss':1, 'd':4, 'di':4, 'dq':16, 'dr':8, 'ds':4, 'pi':8, 'pd':16, 'ps':16, 'psq':8, \
+    def prep_vtt():
+        vtt0 = { 'b':1, 'bs':1, 'bss':1, 'd':4, 'di':4, 'dq':16, 'dr':8, 'ds':4, 'pi':8, 'pd':16, 'ps':16, 'psq':8,
                  'q':8, 'qi':8, 'sd':8, 'sr':4, 'ss':4, 'w':2, 'wi':2 }
         vtt = wdict({ vtname:{v:v for v in vtset} for vtname,vtset in vtypes_tbl.items() })
         vtt.vds[8] = 4
@@ -457,23 +456,30 @@ def process(els: List[wdict]):
         del vtt['p']
         del vtt['ptp']
         vtt.update(vtt0)
+        return vtt
 
-        if vtype in vtt:
-            return vtt[vtype]
-        else:
-            return None
+    vtypes_sz_tbl = prep_vtt()
+
+    vtypes_type_tbl = {k:'float' for k in ['ss', 'sd', 'sr', 'er', 'dr']}
+    vtypes_types_adv_pfloat = { 'pd':(2,8), 'ps':(4,4), }
+    vtypes_type_tbl.update({ k:{'n':v[0], 'vsize':v[1], 'vtype':'float'} for k,v in vtypes_types_adv_pfloat.items() })
 
     def replace_syns_types(syn):
         op_szs = set()
         for p in syn.params:
             if vtype := p.get('vtype'):
                 p['vtype_raw'] = vtype
-                if cvtype := code_vtype(vtype):
-                    p['vtype'] = cvtype
-                    if type(cvtype)==dict:
-                        op_szs.update(cvtype.keys())
+                del p['vtype']
+                if cvtype_sz := vtypes_sz_tbl.get(vtype):
+                    p['vsize'] = cvtype_sz
+                    if type(cvtype_sz)==dict:
+                        op_szs.update(cvtype_sz.keys())
                 else:
-                    p['vtype'] = 'undef'
+                    p['vsize'] = 'undef'
+
+                if cvtype := vtypes_type_tbl.get(vtype):
+                    p['vtype'] = cvtype
+
         syn['op_szs'] = list(op_szs) if len(op_szs)>0 else None
 
 
