@@ -1,3 +1,3 @@
-[submodule ".\\asm_conv\\x86reference"]
-	path = .\\asm_conv\\x86reference
+[submodule "x86reference"]
+	path = asm_conv/x86reference
 	url = https://github.com/Barebit/x86reference.git
