@@ -63,7 +63,7 @@ end
 -- ProFi:start()
 local t1 = os.clock()
 local file = io.open('tools/mcode64_fact.bin' , 'rb')
-local filedata_s = file:read('*all'):sub(1,2000000)
+local filedata_s = file:read('*all'):sub(1,5000000)
 file:close()
 print(os.clock()-t1)
 
